@@ -7,16 +7,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Find required packages
 find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(GLEW REQUIRED)
 
 # Define source files
 set(SOURCES
     src/main.cpp
     src/membrane.cpp
+    src/shader.cpp
 )
 
 # Define header files
 set(HEADERS
     include/membrane.h
+    include/shader.h
 )
 
 # Main executable
@@ -31,4 +34,5 @@ target_include_directories(drumforge PRIVATE
 target_link_libraries(drumforge PRIVATE 
     OpenGL::GL
     glfw
+    GLEW::GLEW
 )
