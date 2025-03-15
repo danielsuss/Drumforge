@@ -1,4 +1,4 @@
-# GPU-Accelerated Drum Simulation Prototype
+# GPU-Accelerated DrumForge Prototype
 
 This repository contains a prototype implementation for simulating drum membranes and resonance using GPU acceleration.
 
@@ -21,7 +21,8 @@ The goal is to create a physically accurate drum sound synthesis system that bal
 - **Libraries**:
   - GLFW (window management)
   - Dear ImGui (user interface)
-  - miniaudio (audio output and file export)
+  - RtAudio (real-time audio playback)
+  - libsndfile (audio file export and analysis)
   - GLM (math operations)
 - **Build System**: CMake with Git submodules for dependencies
 
@@ -53,6 +54,49 @@ After the prototype is functional:
 5. Integrate audio output
 6. Refine and optimize the simulation
 7. Add parameter controls and presets
+
+## Building and Running
+
+### Prerequisites
+- CMake 3.15 or higher
+- CUDA Toolkit
+- OpenGL development libraries
+- GLFW3 development libraries
+- RtAudio development libraries
+- libsndfile development libraries
+- C++ compiler with C++17 support
+
+### Build Instructions
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/drumforge.git
+cd drumforge
+
+# Initialize and update submodules
+git submodule init
+git submodule update
+
+# Create build directory
+mkdir build
+cd build
+
+# Configure and build
+cmake ..
+cmake --build .
+
+# Run the tests
+./drumforge_test
+```
+
+### Test Output
+The test program will verify that all required components are functioning correctly:
+- CUDA functionality (GPU device detection and basic computation)
+- OpenGL/GLFW window creation
+- ImGui interface rendering
+- RtAudio sound playback (you should hear a short 440Hz tone)
+- libsndfile file export (creates a test_sine.wav file)
+
+A successful test will display "✅ All tests completed successfully!" in the console.
 
 ## References
 
