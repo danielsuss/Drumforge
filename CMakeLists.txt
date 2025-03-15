@@ -8,16 +8,27 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
 
+# Define source files
+set(SOURCES
+    src/main.cpp
+    src/membrane.cpp
+)
+
+# Define header files
+set(HEADERS
+    include/membrane.h
+)
+
 # Main executable
-add_executable(drumforge src/main.cpp)
+add_executable(drumforge ${SOURCES} ${HEADERS})
+
+# Include directories
+target_include_directories(drumforge PRIVATE 
+    ${CMAKE_SOURCE_DIR}/include
+)
 
 # Link libraries
 target_link_libraries(drumforge PRIVATE 
     OpenGL::GL
     glfw
-)
-
-# Include directories
-target_include_directories(drumforge PRIVATE 
-    ${CMAKE_SOURCE_DIR}/include
 )

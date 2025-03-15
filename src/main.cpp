@@ -1,5 +1,6 @@
 #include <iostream>
 #include <GLFW/glfw3.h>
+#include <membrane.h>
 
 int main() {
     std::cout << "DrumForge initializing..." << std::endl;
@@ -44,6 +45,10 @@ int main() {
     // Clean up
     glfwDestroyWindow(window);
     glfwTerminate();
+
+    DrumMembrane membrane(64, 1.0f);
+    std::cout << "Grid size: " << membrane.getGridSize() << std::endl;
+    std::cout << "Radius: " << membrane.getRadius() << std::endl;
     
     return 0;
 }
