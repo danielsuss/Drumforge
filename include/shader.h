@@ -1,8 +1,8 @@
-// include/shader.h
 #ifndef DRUMFORGE_SHADER_H
 #define DRUMFORGE_SHADER_H
 
 #include <string>
+#include <glm/glm.hpp>
 
 class Shader {
 private:
@@ -15,9 +15,10 @@ public:
     // Use/activate the shader
     void use();
     
-    // Utility uniform functions
+    // Utility uniform functions - only what we need for now
+    void setVec4(const std::string &name, const glm::vec4 &value) const;
     void setVec4(const std::string &name, float x, float y, float z, float w) const;
-    void setMat4(const std::string &name, const float* value) const;
+    void setMat4(const std::string &name, const glm::mat4 &mat) const;
 
     // Get the program ID
     unsigned int getID() const { return ID; }

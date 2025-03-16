@@ -22,8 +22,6 @@ private:
         return y * gridSize + x;
     }
     
-    // Helper to determine if a point is inside the circular membrane boundary
-    bool isInsideCircle(int x, int y) const;
 
 public:
     // Constructor
@@ -38,6 +36,9 @@ public:
     int getGridSize() const { return gridSize; }
     float getRadius() const { return radius; }
     const std::vector<float>& getHeightData() const { return heights; }
+
+    // Helper to determine if a point is inside the circular membrane boundary
+    bool isInsideCircle(int x, int y) const;
 };
 
 #endif // DRUMFORGE_MEMBRANE_H
