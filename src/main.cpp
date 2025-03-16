@@ -10,11 +10,22 @@
 
 unsigned int VAO, VBO;
 Shader* pointShader;
-DrumMembrane membrane(128, 1.0f);
+DrumMembrane membrane(512, 100.0f);
 
 void initializeGL() {
     // Initialize GLEW
     glewInit();
+
+    GLenum err = glewInit();
+    if (err != GLEW_OK) {
+        std::cerr << "GLEW initialization failed: " << glewGetErrorString(err) << std::endl;
+        return;
+    }
+    std::cout << "GLEW Version: " << glewGetString(GLEW_VERSION) << std::endl;
+    std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
+    std::cout << "GLSL Version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
+    std::cout << "Vendor: " << glGetString(GL_VENDOR) << std::endl;
+    std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
     
     // Create shader
     pointShader = new Shader("shaders/point_vertex.glsl", "shaders/point_fragment.glsl");
@@ -47,6 +58,15 @@ void updateVertexData() {
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), vertices.data(), GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    std::cout << "Generated " << vertices.size() << " vertices" << std::endl;
+
+    // Print the first few vertices to check they look correct
+    if (!vertices.empty()) {
+        std::cout << "First vertex: (" << vertices[0].x << ", " << vertices[0].y << ", " << vertices[0].z << ")" << std::endl;
+        int midIndex = vertices.size() / 2;
+        std::cout << "Middle vertex: (" << vertices[midIndex].x << ", " << vertices[midIndex].y << ", " << vertices[midIndex].z << ")" << std::endl;
+    }
 }
 
 // Cleanup function
@@ -65,11 +85,11 @@ int main() {
     // Set OpenGL version hints
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
     
     // Create a window
     const int windowWidth = 800;
-    const int windowHeight = 600;
+    const int windowHeight = 800;
     GLFWwindow* window = glfwCreateWindow(
         windowWidth, windowHeight, 
         "DrumForge", nullptr, nullptr
@@ -90,9 +110,10 @@ int main() {
     updateVertexData();
 
     // Setup projection and view matrices
-    glm::mat4 projection = glm::ortho(-1.2f, 1.2f, -1.2f, 1.2f, -1.0f, 100.0f);
+    float gridSize = static_cast<float>(membrane.getGridSize());
+    glm::mat4 projection = glm::ortho(-10.0f, gridSize + 10.0f, -10.0f, gridSize + 10.0f, -100.0f, 100.0f);
     glm::mat4 view = glm::lookAt(
-        glm::vec3(0.0f, 0.0f, 3.0f),   // Camera position
+        glm::vec3(0.0f, 0.0f, 2.0f),   // Camera position (moved closer)
         glm::vec3(0.0f, 0.0f, 0.0f),   // Look at origin
         glm::vec3(0.0f, 1.0f, 0.0f)    // Up vector
     );
@@ -101,46 +122,58 @@ int main() {
     while (!glfwWindowShouldClose(window)) {
         // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT);
-        
-        // Set background color (dark gray)
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-
-         // Use shader
-        pointShader->use();
         
-        // Set uniforms
-        pointShader->setMat4("projection", projection);
-        pointShader->setMat4("view", view);
+        // Set up a simple projection matrix
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
+        
+        // Set up modelview matrix
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+        
+        // // Draw a simple triangle
+        // glBegin(GL_TRIANGLES);
+        // glColor3f(1.0f, 0.0f, 0.0f); // Red
+        // glVertex3f(-0.5f, -0.5f, 0.0f);
+        // glColor3f(0.0f, 1.0f, 0.0f); // Green  
+        // glVertex3f(0.5f, -0.5f, 0.0f);
+        // glColor3f(0.0f, 0.0f, 1.0f); // Blue
+        // glVertex3f(0.0f, 0.5f, 0.0f);
+        // glEnd();
 
-        // Draw membrane points
-        glBindVertexArray(VAO);
+        // Draw the membrane points using the fixed function pipeline
+        glPointSize(1.0f); // Make points visible
+
+        // Set up the matrices for the membrane visualization
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        // Use an orthographic projection that matches the grid size
+        glOrtho(0, membrane.getGridSize(), 0, membrane.getGridSize(), -10, 10);
+
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+
+        // Draw only points inside the circle
         int gridSize = membrane.getGridSize();
-        for (int i = 0; i < gridSize * gridSize; i++) {
-            int x = i % gridSize;
-            int y = i / gridSize;
-            
-            // Set point color based on whether it's inside the membrane
-            if (membrane.isInsideCircle(x, y)) {
-                // Blue for points inside membrane
-                pointShader->setVec4("pointColor", glm::vec4(0.0f, 0.6f, 1.0f, 1.0f));
-            } else {
-                // Gray for points outside membrane
-                pointShader->setVec4("pointColor", glm::vec4(0.3f, 0.3f, 0.3f, 1.0f));
+        glBegin(GL_POINTS);
+        for (int y = 0; y < gridSize; y++) {
+            for (int x = 0; x < gridSize; x++) {
+                if (membrane.isInsideCircle(x, y)) {
+                    // Blue for points inside membrane
+                    glColor3f(0.0f, 0.6f, 1.0f);
+                } else {
+                    // Gray for points outside membrane
+                    glColor3f(0.3f, 0.3f, 0.3f);
+                }
+                glVertex3f(x, y, 0.0f);
             }
-            
-            // Draw a single point
-            glDrawArrays(GL_POINTS, i, 1);
         }
-        glBindVertexArray(0);
+        glEnd();
         
         // Swap buffers and poll events
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-    
-    // Clean up
-    glfwDestroyWindow(window);
-    glfwTerminate();
-    
-    return 0;
 }

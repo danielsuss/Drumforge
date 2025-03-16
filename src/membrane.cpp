@@ -59,9 +59,9 @@ std::vector<glm::vec3> DrumMembrane::generateVertices() const {
     // Loop through the grid
     for (int y = 0; y < gridSize; y++) {
         for (int x = 0; x < gridSize; x++) {
-            // Map grid coordinates to normalized [-1, 1] range
-            float nx = (x / (float)(gridSize - 1)) * 2.0f - 1.0f;
-            float ny = (y / (float)(gridSize - 1)) * 2.0f - 1.0f;
+            // Use raw grid coordinates without normalization
+            float nx = static_cast<float>(x);
+            float ny = static_cast<float>(y);
             
             // Get height at this point (will be 0 initially)
             float nz = getHeight(x, y);
