@@ -1,6 +1,7 @@
 #include "membrane.h"
 #include <cmath>
 #include <algorithm>
+#include <glm/glm.hpp>
 
 bool DrumMembrane::isInsideCircle(int x, int y) const {
     // Calculate grid center
@@ -47,4 +48,28 @@ float DrumMembrane::getHeight(int x, int y) const {
     }
     
     return heights[getIndex(x, y)];
+}
+
+std::vector<glm::vec3> DrumMembrane::generateVertices() const {
+    std::vector<glm::vec3> vertices;
+    
+    // Reserve space for efficiency
+    vertices.reserve(gridSize * gridSize);
+    
+    // Loop through the grid
+    for (int y = 0; y < gridSize; y++) {
+        for (int x = 0; x < gridSize; x++) {
+            // Map grid coordinates to normalized [-1, 1] range
+            float nx = (x / (float)(gridSize - 1)) * 2.0f - 1.0f;
+            float ny = (y / (float)(gridSize - 1)) * 2.0f - 1.0f;
+            
+            // Get height at this point (will be 0 initially)
+            float nz = getHeight(x, y);
+            
+            // Add vertex to the list
+            vertices.push_back(glm::vec3(nx, ny, nz));
+        }
+    }
+    
+    return vertices;
 }

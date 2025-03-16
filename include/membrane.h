@@ -2,6 +2,7 @@
 #define DRUMFORGE_MEMBRANE_H
 
 #include <vector>
+#include <glm/glm.hpp>
 
 class DrumMembrane {
 private:
@@ -39,6 +40,9 @@ public:
 
     // Helper to determine if a point is inside the circular membrane boundary
     bool isInsideCircle(int x, int y) const;
+
+    // Helper to generate vertices for rendering
+    std::vector<glm::vec3> generateVertices() const;
 };
 
 #endif // DRUMFORGE_MEMBRANE_H
