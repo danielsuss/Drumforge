@@ -13,6 +13,8 @@ private:
     // Core data arrays
     std::vector<float> heights;     // Current height displacement at each point
     std::vector<float> velocities;  // Current vertical velocity at each point
+    float prevTimestep;          // Previous time step value
+    std::vector<float> prevHeights;  // Heights at previous time step for FDTD
     
     // Simulation parameters
     float tension;
@@ -43,6 +45,9 @@ public:
 
     // Helper to generate vertices for rendering
     std::vector<glm::vec3> generateVertices() const;
+
+    void updateSimulation(float timestep);  // Main simulation step function
+    void setBoundaryConditions();          // Handle membrane boundary
 };
 
 #endif // DRUMFORGE_MEMBRANE_H
