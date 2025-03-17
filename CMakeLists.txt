@@ -36,4 +36,5 @@ target_link_libraries(drumforge PRIVATE
     OpenGL::GL
     glfw
     GLEW::GLEW
+    GLU
 )

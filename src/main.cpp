@@ -5,17 +5,26 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <GL/glu.h>  // Add GLU for gluPerspective and gluLookAt
 #include "membrane.h"
 #include "shader.h"
 
+// Global variables
 unsigned int VAO, VBO;
 Shader* pointShader;
-DrumMembrane membrane(512, 100.0f);
+// Create membrane with appropriate parameters:
+// Size: 32x32 grid points
+// Radius: 10.0 units
+// Tension: 1.0 (default)
+// Damping: 0.001 (very small damping to allow oscillation with slow decay)
+DrumMembrane membrane(32, 10.0f, 1.0f, 0.01f);
+float lastFrameTime = 0.0f;
+
+// Mouse interaction variables
+bool mousePressed = false;
 
 void initializeGL() {
     // Initialize GLEW
-    glewInit();
-
     GLenum err = glewInit();
     if (err != GLEW_OK) {
         std::cerr << "GLEW initialization failed: " << glewGetErrorString(err) << std::endl;
@@ -58,14 +67,34 @@ void updateVertexData() {
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), vertices.data(), GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
 
-    std::cout << "Generated " << vertices.size() << " vertices" << std::endl;
-
-    // Print the first few vertices to check they look correct
-    if (!vertices.empty()) {
-        std::cout << "First vertex: (" << vertices[0].x << ", " << vertices[0].y << ", " << vertices[0].z << ")" << std::endl;
-        int midIndex = vertices.size() / 2;
-        std::cout << "Middle vertex: (" << vertices[midIndex].x << ", " << vertices[midIndex].y << ", " << vertices[midIndex].z << ")" << std::endl;
+// Mouse button callback function
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    if (button == GLFW_MOUSE_BUTTON_LEFT) {
+        if (action == GLFW_PRESS) {
+            mousePressed = true;
+            
+            // Get cursor position
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+            
+            // Get window size for normalization
+            int width, height;
+            glfwGetWindowSize(window, &width, &height);
+            
+            // Normalize coordinates to [0,1] range
+            float normalizedX = static_cast<float>(xpos) / width;
+            // Invert Y (OpenGL Y is bottom-to-top)
+            float normalizedY = 1.0f - static_cast<float>(ypos) / height;
+            
+            // Apply impulse at click position with strength 10.0
+            membrane.applyImpulse(normalizedX, normalizedY, 0.05f);
+            
+            std::cout << "Applied impulse at: " << normalizedX << ", " << normalizedY << std::endl;
+        } else if (action == GLFW_RELEASE) {
+            mousePressed = false;
+        }
     }
 }
 
@@ -80,12 +109,16 @@ int main() {
     std::cout << "DrumForge initializing..." << std::endl;
     
     // Initialize GLFW
-    glfwInit();
+    if (!glfwInit()) {
+        std::cerr << "Failed to initialize GLFW" << std::endl;
+        return -1;
+    }
     
     // Set OpenGL version hints
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
+    glfwWindowHint(GLFW_SAMPLES, 4); // Enable 4x multisampling for smoother edges
     
     // Create a window
     const int windowWidth = 800;
@@ -95,8 +128,17 @@ int main() {
         "DrumForge", nullptr, nullptr
     );
     
+    if (!window) {
+        std::cerr << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
+    
     // Make the window's context current
     glfwMakeContextCurrent(window);
+    
+    // Set the mouse button callback
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
     
     // Enable VSync
     glfwSwapInterval(1);
@@ -109,71 +151,143 @@ int main() {
     // Setup membrane and initial buffer data
     updateVertexData();
 
-    // Setup projection and view matrices
-    float gridSize = static_cast<float>(membrane.getGridSize());
-    glm::mat4 projection = glm::ortho(-10.0f, gridSize + 10.0f, -10.0f, gridSize + 10.0f, -100.0f, 100.0f);
-    glm::mat4 view = glm::lookAt(
-        glm::vec3(0.0f, 0.0f, 2.0f),   // Camera position (moved closer)
-        glm::vec3(0.0f, 0.0f, 0.0f),   // Look at origin
-        glm::vec3(0.0f, 1.0f, 0.0f)    // Up vector
-    );
-    
     // Main rendering loop
     while (!glfwWindowShouldClose(window)) {
+        // Calculate delta time
+        float currentTime = glfwGetTime();
+        float deltaTime = currentTime - lastFrameTime;
+        lastFrameTime = currentTime;
+        
+        static float accumulator = 0.0f;
+
+        // Global variables
+        float simulationSpeed = 10.0f;  // How much faster than real-time to run
+        const float fixedPhysicsTimestep = 1.0f / 5.0f;  // Keep this constant for consistent physics
+
+        // In your main loop:
+        // Update simulation with fixed time step for stability but apply simulation speed
+        accumulator += deltaTime * simulationSpeed;
+
+        // Run physics updates with the SAME fixed timestep
+        while (accumulator >= fixedPhysicsTimestep) {
+            membrane.updateSimulation(fixedPhysicsTimestep);
+            accumulator -= fixedPhysicsTimestep;
+        }
+        
+        // Update vertex data after physics simulation
+        updateVertexData();
+        
         // Clear the screen
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         
-        // Set up a simple projection matrix
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
+        // Enable depth testing for proper 3D rendering
+        glEnable(GL_DEPTH_TEST);
         
-        // Set up modelview matrix
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-        
-        // // Draw a simple triangle
-        // glBegin(GL_TRIANGLES);
-        // glColor3f(1.0f, 0.0f, 0.0f); // Red
-        // glVertex3f(-0.5f, -0.5f, 0.0f);
-        // glColor3f(0.0f, 1.0f, 0.0f); // Green  
-        // glVertex3f(0.5f, -0.5f, 0.0f);
-        // glColor3f(0.0f, 0.0f, 1.0f); // Blue
-        // glVertex3f(0.0f, 0.5f, 0.0f);
-        // glEnd();
-
-        // Draw the membrane points using the fixed function pipeline
-        glPointSize(1.0f); // Make points visible
-
         // Set up the matrices for the membrane visualization
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        // Use an orthographic projection that matches the grid size
-        glOrtho(0, membrane.getGridSize(), 0, membrane.getGridSize(), -10, 10);
-
+        
+        // Use a perspective projection for better 3D visualization
+        // Parameters: field of view, aspect ratio, near plane, far plane
+        float aspectRatio = 1.0f; // Assuming square window
+        gluPerspective(45.0f, aspectRatio, 0.1f, 100.0f);
+        
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
+        
+        float gridCenter = membrane.getGridSize() / 2.0f;
+        float gridSize = membrane.getGridSize();
 
-        // Draw only points inside the circle
-        int gridSize = membrane.getGridSize();
+        // Position the camera to view the membrane from an angle
+        // Parameters: eyeX, eyeY, eyeZ, centerX, centerY, centerZ, upX, upY, upZ
+        gluLookAt(
+            gridCenter - gridSize * 0.8f,  // Move camera left
+            gridCenter - gridSize * 0.5f,  // Move camera down slightly
+            gridSize * 0.9f,               // Keep camera above membrane
+            gridCenter, gridCenter, 0.0f,  // Still looking at center
+            0.0f, 0.0f, 1.0f               // Changed up vector to Z axis
+        );
+        
+        // Draw membrane using GL_POINTS
+        glPointSize(6.0f); // Make points larger and more visible
+        
+        // Draw the grid lines first (optional)
+        glColor3f(0.3f, 0.3f, 0.3f);
+        glBegin(GL_LINES);
+        for (int i = 0; i <= membrane.getGridSize(); i++) {
+            // Draw horizontal grid lines
+            glVertex3f(0, i, 0);
+            glVertex3f(membrane.getGridSize(), i, 0);
+            
+            // Draw vertical grid lines
+            glVertex3f(i, 0, 0);
+            glVertex3f(i, membrane.getGridSize(), 0);
+        }
+        glEnd();
+        
+        // Draw the membrane points
         glBegin(GL_POINTS);
-        for (int y = 0; y < gridSize; y++) {
-            for (int x = 0; x < gridSize; x++) {
+        for (int y = 0; y < membrane.getGridSize(); y++) {
+            for (int x = 0; x < membrane.getGridSize(); x++) {
                 if (membrane.isInsideCircle(x, y)) {
-                    // Blue for points inside membrane
+                    // Get the current height from the simulation
+                    float height = membrane.getHeight(x, y);
+                    
+                    // Scale the height for better visibility
+                    float scaledHeight = height * 5.0f;
+                    
+                    // Use a fixed color for the membrane points
                     glColor3f(0.0f, 0.6f, 1.0f);
+                    
+                    // Draw the point at its 3D position with Z coordinate showing height
+                    glVertex3f(x, y, scaledHeight);
                 } else {
                     // Gray for points outside membrane
                     glColor3f(0.3f, 0.3f, 0.3f);
+                    glVertex3f(x, y, 0.0f);
                 }
-                glVertex3f(x, y, 0.0f);
             }
         }
         glEnd();
+        
+        // Draw connecting lines to represent the membrane surface as a wireframe mesh
+        glColor3f(0.0f, 0.4f, 0.8f);
+        glBegin(GL_LINES);
+        for (int y = 0; y < membrane.getGridSize(); y++) {
+            for (int x = 0; x < membrane.getGridSize(); x++) {
+                if (membrane.isInsideCircle(x, y)) {
+                    float height = membrane.getHeight(x, y) * 5.0f;
+                    
+                    // Connect horizontally if next point is also inside circle
+                    if (x + 1 < membrane.getGridSize() && membrane.isInsideCircle(x + 1, y)) {
+                        float nextHeight = membrane.getHeight(x + 1, y) * 5.0f;
+                        glVertex3f(x, y, height);
+                        glVertex3f(x + 1, y, nextHeight);
+                    }
+                    
+                    // Connect vertically if next point is also inside circle
+                    if (y + 1 < membrane.getGridSize() && membrane.isInsideCircle(x, y + 1)) {
+                        float nextHeight = membrane.getHeight(x, y + 1) * 5.0f;
+                        glVertex3f(x, y, height);
+                        glVertex3f(x, y + 1, nextHeight);
+                    }
+                }
+            }
+        }
+        glEnd();
+        
+        // Disable depth testing when done
+        glDisable(GL_DEPTH_TEST);
         
         // Swap buffers and poll events
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+    
+    // Clean up
+    cleanupGL();
+    glfwTerminate();
+    
+    return 0;
 }
