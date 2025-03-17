@@ -17,7 +17,7 @@ Shader* pointShader;
 // Radius: 10.0 units
 // Tension: 1.0 (default)
 // Damping: 0.001 (very small damping to allow oscillation with slow decay)
-DrumMembrane membrane(32, 10.0f, 1.0f, 0.01f);
+DrumMembrane membrane(64, 20.0f, 10.0f, 0.1f);
 float lastFrameTime = 0.0f;
 
 // Mouse interaction variables
@@ -70,31 +70,68 @@ void updateVertexData() {
 }
 
 // Mouse button callback function
+// Mouse button callback function
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    if (button == GLFW_MOUSE_BUTTON_LEFT) {
-        if (action == GLFW_PRESS) {
-            mousePressed = true;
-            
-            // Get cursor position
-            double xpos, ypos;
-            glfwGetCursorPos(window, &xpos, &ypos);
-            
-            // Get window size for normalization
-            int width, height;
-            glfwGetWindowSize(window, &width, &height);
-            
-            // Normalize coordinates to [0,1] range
-            float normalizedX = static_cast<float>(xpos) / width;
-            // Invert Y (OpenGL Y is bottom-to-top)
-            float normalizedY = 1.0f - static_cast<float>(ypos) / height;
-            
-            // Apply impulse at click position with strength 10.0
-            membrane.applyImpulse(normalizedX, normalizedY, 0.05f);
-            
-            std::cout << "Applied impulse at: " << normalizedX << ", " << normalizedY << std::endl;
-        } else if (action == GLFW_RELEASE) {
-            mousePressed = false;
-        }
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+        mousePressed = true;
+        
+        // Get cursor position
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+        
+        // Get window size
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+        
+        // Convert to normalized device coordinates (-1 to 1)
+        float ndcX = (2.0f * xpos) / width - 1.0f;
+        float ndcY = 1.0f - (2.0f * ypos) / height;
+        
+        // Set up matrices (these should match your rendering matrices)
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 1.0f, 0.1f, 100.0f);
+        
+        float gridCenter = membrane.getGridSize() / 2.0f;
+        float gridSize = membrane.getGridSize();
+        
+        glm::mat4 view = glm::lookAt(
+            glm::vec3(gridCenter - gridSize * 0.8f, gridCenter - gridSize * 0.5f, gridSize * 0.9f),
+            glm::vec3(gridCenter, gridCenter, 0.0f),
+            glm::vec3(0.0f, 0.0f, 1.0f)
+        );
+        
+        // Create a ray from camera through clicked point
+        glm::vec4 rayClip = glm::vec4(ndcX, ndcY, -1.0, 1.0);
+        glm::mat4 invProjection = glm::inverse(projection);
+        glm::vec4 rayEye = invProjection * rayClip;
+        rayEye = glm::vec4(rayEye.x, rayEye.y, -1.0, 0.0);
+        
+        glm::mat4 invView = glm::inverse(view);
+        glm::vec4 rayWorld = invView * rayEye;
+        glm::vec3 rayDirection = glm::normalize(glm::vec3(rayWorld));
+        
+        // Origin of the ray (camera position)
+        glm::vec3 rayOrigin = glm::vec3(invView[3]);
+        
+        // Intersect ray with the membrane plane (z = 0)
+        // P = O + t*D, where t = -(O.z) / D.z
+        float t = -rayOrigin.z / rayDirection.z;
+        glm::vec3 intersectionPoint = rayOrigin + t * rayDirection;
+        
+        // Convert intersection point to grid coordinates
+        float gridX = intersectionPoint.x;
+        float gridY = intersectionPoint.y;
+        
+        // Normalize to [0,1] for the membrane
+        float normalizedX = gridX / membrane.getGridSize();
+        float normalizedY = gridY / membrane.getGridSize();
+        
+        // Apply impulse at the calculated position
+        membrane.applyImpulse(normalizedX, normalizedY, 0.5f);
+        
+        std::cout << "Applied impulse at grid: " << gridX << ", " << gridY 
+                  << " (normalized: " << normalizedX << ", " << normalizedY << ")" << std::endl;
+    } else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
+        mousePressed = false;
     }
 }
 
@@ -236,9 +273,12 @@ int main() {
                     
                     // Scale the height for better visibility
                     float scaledHeight = height * 5.0f;
-                    
-                    // Use a fixed color for the membrane points
-                    glColor3f(0.0f, 0.6f, 1.0f);
+                                        
+                    // Use a color gradient based on height
+                    float r = 0.0f;
+                    float g = 0.6f + scaledHeight * 0.4f;  // More green for positive heights
+                    float b = 1.0f - fabs(scaledHeight) * 0.5f;  // Less blue for extreme heights
+                    glColor3f(r, g, b);
                     
                     // Draw the point at its 3D position with Z coordinate showing height
                     glVertex3f(x, y, scaledHeight);

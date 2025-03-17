@@ -198,7 +198,8 @@ void DrumMembrane::applyImpulse(float x, float y, float strength) {
                 if (dist <= impulseRadius) {
                     float factor = strength * exp(-dist*dist / (impulseRadius/2.0f));
                     int idx = getIndex(ix, iy);
-                    heights[idx] += factor;
+                    // Use negative factor to make the membrane go down instead of up
+                    heights[idx] -= factor;  // Changed from += to -=
                 }
             }
         }
