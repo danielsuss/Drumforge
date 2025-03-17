@@ -54,34 +54,62 @@ void DrumMembrane::setBoundaryConditions() {
     }
 }
 
-// Implement the main simulation step
 void DrumMembrane::updateSimulation(float timestep) {
     // Wave equation parameters
-    float c = sqrt(tension);  // Wave propagation speed (simplified)
+    float c = sqrt(tension);  // Wave propagation speed
+    float dx = 1.0f;  // Grid spacing (normalized)
     
-    // First time step handling
-    if (prevTimestep <= 0.0f) {
-        prevTimestep = timestep;
-        // For first step, we copy current heights to prevHeights
-        prevHeights = heights;
-        return;
-    }
+    // CFL stability condition check for 2D wave equation
+    float maxTimestep = dx / (c * sqrt(2.0f));
+    
+    // Clamp timestep to maintain stability
+    float safeTimestep = (timestep > maxTimestep) ? maxTimestep : timestep;
+    
+    // FDTD coefficient using the safe timestep
+    float coef = c * c * safeTimestep * safeTimestep / (dx * dx);
     
     // Create a temporary array for the new heights
     std::vector<float> newHeights = heights;  // Start with current heights
     
-    // CFL stability condition check
-    float dx = 1.0f;  // Grid spacing (normalized)
-    float maxTimestep = 0.5f * dx / c;  // Maximum stable time step
-    
-    if (timestep > maxTimestep) {
-        timestep = maxTimestep;  // Clamp to stable value
+    // First time step special handling
+    if (prevTimestep <= 0.0f) {
+        // For the first time step, we need special handling
+        // We use the wave equation and current velocities
+        
+        for (int y = 1; y < gridSize - 1; y++) {
+            for (int x = 1; x < gridSize - 1; x++) {
+                if (isInsideCircle(x, y)) {
+                    int idx = getIndex(x, y);
+                    
+                    // Gather neighboring points for Laplacian
+                    float uCenter = heights[idx];
+                    float uLeft = heights[getIndex(x-1, y)];
+                    float uRight = heights[getIndex(x+1, y)];
+                    float uTop = heights[getIndex(x, y-1)];
+                    float uBottom = heights[getIndex(x, y+1)];
+                    
+                    // Discrete Laplacian
+                    float laplacian = uLeft + uRight + uTop + uBottom - 4.0f * uCenter;
+                    
+                    // For first step: u(t+dt) = u(t) + dt*v(t) + 0.5*dt²*a(t)
+                    // Where a(t) = c²*∇²u - damping*v(t)
+                    float acceleration = c * c * laplacian / (dx * dx) - damping * velocities[idx];
+                    
+                    // Calculate the next height using Taylor expansion
+                    newHeights[idx] = uCenter + safeTimestep * velocities[idx] + 
+                                     0.5f * safeTimestep * safeTimestep * acceleration;
+                }
+            }
+        }
+        
+        // Set up for next time step
+        prevHeights = heights;
+        heights = newHeights;
+        prevTimestep = safeTimestep;
+        return;
     }
     
-    // FDTD coefficient
-    float coef = (c * timestep / dx) * (c * timestep / dx);
-    
-    // Update interior points using FDTD method
+    // Normal FDTD update for subsequent steps
     for (int y = 1; y < gridSize - 1; y++) {
         for (int x = 1; x < gridSize - 1; x++) {
             if (isInsideCircle(x, y)) {
@@ -97,11 +125,14 @@ void DrumMembrane::updateSimulation(float timestep) {
                 // Discrete Laplacian
                 float laplacian = uLeft + uRight + uTop + uBottom - 4.0f * uCenter;
                 
-                // FDTD update equation: u(t+dt) = 2*u(t) - u(t-dt) + coef * laplacian
+                // FDTD update equation
                 newHeights[idx] = 2.0f * uCenter - prevHeights[idx] + coef * laplacian;
                 
-                // Apply damping
-                newHeights[idx] = newHeights[idx] * (1.0f - damping);
+                // Calculate implied velocity for damping
+                float velocity = (newHeights[idx] - prevHeights[idx]) / (2.0f * safeTimestep);
+                
+                // Apply damping proportional to velocity
+                newHeights[idx] -= damping * velocity * safeTimestep;
             }
         }
     }
@@ -114,7 +145,7 @@ void DrumMembrane::updateSimulation(float timestep) {
     setBoundaryConditions();
     
     // Store current timestep
-    prevTimestep = timestep;
+    prevTimestep = safeTimestep;
 }
 
 void DrumMembrane::applyImpulse(float x, float y, float strength) {
