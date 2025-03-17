@@ -5,23 +5,262 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <GL/glu.h>  // Add GLU for gluPerspective and gluLookAt
+#include <GL/glu.h>
 #include "membrane.h"
 #include "shader.h"
+#include "airspace.h"
 
 // Global variables
 unsigned int VAO, VBO;
 Shader* pointShader;
-// Create membrane with appropriate parameters:
-// Size: 32x32 grid points
-// Radius: 10.0 units
-// Tension: 1.0 (default)
-// Damping: 0.001 (very small damping to allow oscillation with slow decay)
 DrumMembrane membrane(64, 20.0f, 10.0f, 0.1f);
+AirSpace* airSpace = nullptr;
 float lastFrameTime = 0.0f;
 
 // Mouse interaction variables
 bool mousePressed = false;
+
+// Camera variables
+glm::vec3 cameraPos;
+glm::vec3 cameraTarget;
+float cameraSpeed = 20.0f;
+
+// Display controls
+bool showAirspace = true;
+bool showMembrane = true;
+bool showGrid = true;
+
+// Print keyboard controls
+void printControls() {
+    std::cout << "\n=== Keyboard Controls ===\n";
+    std::cout << "Camera Movement:\n";
+    std::cout << "  W/S - Move forward/backward\n";
+    std::cout << "  A/D - Move left/right\n";
+    std::cout << "  Q/E - Move up/down\n";
+    
+    std::cout << "\nVisibility Toggles:\n";
+    std::cout << "  1 - Toggle airspace visibility\n";
+    std::cout << "  2 - Toggle membrane visibility\n";
+    std::cout << "  3 - Toggle grid visibility\n";
+    
+    std::cout << "\nOther Controls:\n";
+    std::cout << "  R - Reset membrane to flat state\n";
+    std::cout << "  H - Show this help message\n";
+    std::cout << "  ESC - Exit application\n";
+    std::cout << "======================\n\n";
+}
+
+// Process keyboard input each frame
+void processKeyboardInput(GLFWwindow* window, float deltaTime) {
+    // Camera movement
+    float cameraActualSpeed = cameraSpeed * deltaTime;
+    
+    // Calculate camera vectors
+    glm::vec3 forward = glm::normalize(cameraTarget - cameraPos);
+    glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 0.0f, 1.0f)));
+    glm::vec3 up = glm::vec3(0.0f, 0.0f, 1.0f);
+    
+    // Forward/Backward
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+        cameraPos += forward * cameraActualSpeed;
+        cameraTarget += forward * cameraActualSpeed;
+    }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+        cameraPos -= forward * cameraActualSpeed;
+        cameraTarget -= forward * cameraActualSpeed;
+    }
+    
+    // Left/Right
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+        cameraPos -= right * cameraActualSpeed;
+        cameraTarget -= right * cameraActualSpeed;
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+        cameraPos += right * cameraActualSpeed;
+        cameraTarget += right * cameraActualSpeed;
+    }
+    
+    // Up/Down
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+        cameraPos += up * cameraActualSpeed;
+        cameraTarget += up * cameraActualSpeed;
+    }
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+        cameraPos -= up * cameraActualSpeed;
+        cameraTarget -= up * cameraActualSpeed;
+    }
+}
+
+// Handle key press events (called by GLFW)
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    // Only handle key press events (not repeat or release)
+    if (action != GLFW_PRESS) return;
+    
+    // Handle various key commands using a switch statement for easy expansion
+    switch (key) {
+        // Visibility toggles
+        case GLFW_KEY_1:
+            showAirspace = !showAirspace;
+            std::cout << "Airspace visibility: " << (showAirspace ? "ON" : "OFF") << std::endl;
+            break;
+            
+        case GLFW_KEY_2:
+            showMembrane = !showMembrane;
+            std::cout << "Membrane visibility: " << (showMembrane ? "ON" : "OFF") << std::endl;
+            break;
+            
+        case GLFW_KEY_3:
+            showGrid = !showGrid;
+            std::cout << "Grid visibility: " << (showGrid ? "ON" : "OFF") << std::endl;
+            break;
+            
+        // Reset membrane
+        case GLFW_KEY_R:
+            membrane.reset();
+            std::cout << "Membrane reset to flat state" << std::endl;
+            break;
+            
+        // Show help
+        case GLFW_KEY_H:
+            printControls();
+            break;
+            
+        // Exit application
+        case GLFW_KEY_ESCAPE:
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+            break;
+    }
+}
+
+// Mouse button callback function
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+        mousePressed = true;
+        
+        // Get cursor position
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+        
+        // Get window size
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+        
+        // Convert to normalized device coordinates (-1 to 1)
+        float ndcX = (2.0f * xpos) / width - 1.0f;
+        float ndcY = 1.0f - (2.0f * ypos) / height;
+        
+        // Set up matrices (these should match your rendering matrices)
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 1.0f, 0.1f, 100.0f);
+        
+        // Use current camera position
+        glm::mat4 view = glm::lookAt(
+            cameraPos,
+            cameraTarget,
+            glm::vec3(0.0f, 0.0f, 1.0f)
+        );
+        
+        // Create a ray from camera through clicked point
+        glm::vec4 rayClip = glm::vec4(ndcX, ndcY, -1.0, 1.0);
+        glm::mat4 invProjection = glm::inverse(projection);
+        glm::vec4 rayEye = invProjection * rayClip;
+        rayEye = glm::vec4(rayEye.x, rayEye.y, -1.0, 0.0);
+        
+        glm::mat4 invView = glm::inverse(view);
+        glm::vec4 rayWorld = invView * rayEye;
+        glm::vec3 rayDirection = glm::normalize(glm::vec3(rayWorld));
+        
+        // Origin of the ray (camera position)
+        glm::vec3 rayOrigin = cameraPos;
+        
+        // Intersect ray with the membrane plane (z = 0)
+        // P = O + t*D, where t = -(O.z) / D.z
+        float t = -rayOrigin.z / rayDirection.z;
+        glm::vec3 intersectionPoint = rayOrigin + t * rayDirection;
+        
+        // Convert intersection point to grid coordinates
+        float gridX = intersectionPoint.x;
+        float gridY = intersectionPoint.y;
+        
+        // Normalize to [0,1] for the membrane
+        float normalizedX = gridX / membrane.getGridSize();
+        float normalizedY = gridY / membrane.getGridSize();
+        
+        // Apply impulse at the calculated position
+        membrane.applyImpulse(normalizedX, normalizedY, 0.5f);
+        
+        std::cout << "Applied impulse at grid: " << gridX << ", " << gridY 
+                  << " (normalized: " << normalizedX << ", " << normalizedY << ")" << std::endl;
+    } else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
+        mousePressed = false;
+    }
+}
+
+// Draw AirSpace as a wireframe cube
+void drawAirSpace() {
+    if (!airSpace || !showAirspace) return;
+    
+    // Get dimensions
+    float minX = airSpace->getPosX();
+    float minY = airSpace->getPosY();
+    float minZ = airSpace->getPosZ();
+    float maxX = minX + airSpace->getSizeX() * airSpace->getCellSize();
+    float maxY = minY + airSpace->getSizeY() * airSpace->getCellSize();
+    float maxZ = minZ + airSpace->getSizeZ() * airSpace->getCellSize();
+    
+    // Set cube color to red
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glLineWidth(2.0f);  // Thicker lines for visibility
+    
+    // Draw wireframe cube
+    glBegin(GL_LINES);
+    
+    // Bottom face
+    glVertex3f(minX, minY, minZ); glVertex3f(maxX, minY, minZ);
+    glVertex3f(maxX, minY, minZ); glVertex3f(maxX, maxY, minZ);
+    glVertex3f(maxX, maxY, minZ); glVertex3f(minX, maxY, minZ);
+    glVertex3f(minX, maxY, minZ); glVertex3f(minX, minY, minZ);
+    
+    // Top face
+    glVertex3f(minX, minY, maxZ); glVertex3f(maxX, minY, maxZ);
+    glVertex3f(maxX, minY, maxZ); glVertex3f(maxX, maxY, maxZ);
+    glVertex3f(maxX, maxY, maxZ); glVertex3f(minX, maxY, maxZ);
+    glVertex3f(minX, maxY, maxZ); glVertex3f(minX, minY, maxZ);
+    
+    // Connecting lines
+    glVertex3f(minX, minY, minZ); glVertex3f(minX, minY, maxZ);
+    glVertex3f(maxX, minY, minZ); glVertex3f(maxX, minY, maxZ);
+    glVertex3f(maxX, maxY, minZ); glVertex3f(maxX, maxY, maxZ);
+    glVertex3f(minX, maxY, minZ); glVertex3f(minX, maxY, maxZ);
+    
+    glEnd();
+    
+    // Reset line width
+    glLineWidth(1.0f);
+}
+
+// Draw XYZ axes at origin
+void drawAxes() {
+    glLineWidth(2.0f);
+    glBegin(GL_LINES);
+    
+    // X axis (red)
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glVertex3f(0.0f, 0.0f, 0.0f);
+    glVertex3f(10.0f, 0.0f, 0.0f);
+    
+    // Y axis (green)
+    glColor3f(0.0f, 1.0f, 0.0f);
+    glVertex3f(0.0f, 0.0f, 0.0f);
+    glVertex3f(0.0f, 10.0f, 0.0f);
+    
+    // Z axis (blue)
+    glColor3f(0.0f, 0.0f, 1.0f);
+    glVertex3f(0.0f, 0.0f, 0.0f);
+    glVertex3f(0.0f, 0.0f, 10.0f);
+    
+    glEnd();
+    glLineWidth(1.0f);
+}
 
 void initializeGL() {
     // Initialize GLEW
@@ -69,77 +308,12 @@ void updateVertexData() {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-// Mouse button callback function
-// Mouse button callback function
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-        mousePressed = true;
-        
-        // Get cursor position
-        double xpos, ypos;
-        glfwGetCursorPos(window, &xpos, &ypos);
-        
-        // Get window size
-        int width, height;
-        glfwGetWindowSize(window, &width, &height);
-        
-        // Convert to normalized device coordinates (-1 to 1)
-        float ndcX = (2.0f * xpos) / width - 1.0f;
-        float ndcY = 1.0f - (2.0f * ypos) / height;
-        
-        // Set up matrices (these should match your rendering matrices)
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 1.0f, 0.1f, 100.0f);
-        
-        float gridCenter = membrane.getGridSize() / 2.0f;
-        float gridSize = membrane.getGridSize();
-        
-        glm::mat4 view = glm::lookAt(
-            glm::vec3(gridCenter - gridSize * 0.8f, gridCenter - gridSize * 0.5f, gridSize * 0.9f),
-            glm::vec3(gridCenter, gridCenter, 0.0f),
-            glm::vec3(0.0f, 0.0f, 1.0f)
-        );
-        
-        // Create a ray from camera through clicked point
-        glm::vec4 rayClip = glm::vec4(ndcX, ndcY, -1.0, 1.0);
-        glm::mat4 invProjection = glm::inverse(projection);
-        glm::vec4 rayEye = invProjection * rayClip;
-        rayEye = glm::vec4(rayEye.x, rayEye.y, -1.0, 0.0);
-        
-        glm::mat4 invView = glm::inverse(view);
-        glm::vec4 rayWorld = invView * rayEye;
-        glm::vec3 rayDirection = glm::normalize(glm::vec3(rayWorld));
-        
-        // Origin of the ray (camera position)
-        glm::vec3 rayOrigin = glm::vec3(invView[3]);
-        
-        // Intersect ray with the membrane plane (z = 0)
-        // P = O + t*D, where t = -(O.z) / D.z
-        float t = -rayOrigin.z / rayDirection.z;
-        glm::vec3 intersectionPoint = rayOrigin + t * rayDirection;
-        
-        // Convert intersection point to grid coordinates
-        float gridX = intersectionPoint.x;
-        float gridY = intersectionPoint.y;
-        
-        // Normalize to [0,1] for the membrane
-        float normalizedX = gridX / membrane.getGridSize();
-        float normalizedY = gridY / membrane.getGridSize();
-        
-        // Apply impulse at the calculated position
-        membrane.applyImpulse(normalizedX, normalizedY, 0.5f);
-        
-        std::cout << "Applied impulse at grid: " << gridX << ", " << gridY 
-                  << " (normalized: " << normalizedX << ", " << normalizedY << ")" << std::endl;
-    } else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
-        mousePressed = false;
-    }
-}
-
 // Cleanup function
 void cleanupGL() {
     glDeleteBuffers(1, &VBO);
     glDeleteVertexArrays(1, &VAO);
     delete pointShader;
+    delete airSpace;
 }
 
 int main() {
@@ -174,8 +348,9 @@ int main() {
     // Make the window's context current
     glfwMakeContextCurrent(window);
     
-    // Set the mouse button callback
+    // Set callbacks
     glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetKeyCallback(window, key_callback);
     
     // Enable VSync
     glfwSwapInterval(1);
@@ -187,6 +362,27 @@ int main() {
     
     // Setup membrane and initial buffer data
     updateVertexData();
+    
+    // Initialize AirSpace
+    airSpace = new AirSpace(
+        membrane.getGridSize(),  // Same width as membrane
+        membrane.getGridSize(),  // Same height as membrane
+        membrane.getGridSize()/2,  // Half the height for Z dimension
+        1.0f  // Each cell is 1.0 world units
+    );
+    
+    // Position the airspace to align with the membrane
+    airSpace->setPosition(0.0f, 0.0f, 0.0f);
+    
+    // Set up initial camera position
+    float gridCenter = membrane.getGridSize() / 2.0f;
+    float gridSize = membrane.getGridSize();
+    
+    cameraPos = glm::vec3(gridCenter - gridSize * 0.8f, gridCenter - gridSize * 0.5f, gridSize * 0.9f);
+    cameraTarget = glm::vec3(gridCenter, gridCenter, 0.0f);
+    
+    // Print controls
+    printControls();
 
     // Main rendering loop
     while (!glfwWindowShouldClose(window)) {
@@ -195,13 +391,15 @@ int main() {
         float deltaTime = currentTime - lastFrameTime;
         lastFrameTime = currentTime;
         
+        // Process keyboard input for camera movement
+        processKeyboardInput(window, deltaTime);
+        
         static float accumulator = 0.0f;
 
         // Global variables
         float simulationSpeed = 10.0f;  // How much faster than real-time to run
         const float fixedPhysicsTimestep = 1.0f / 5.0f;  // Keep this constant for consistent physics
 
-        // In your main loop:
         // Update simulation with fixed time step for stability but apply simulation speed
         accumulator += deltaTime * simulationSpeed;
 
@@ -227,95 +425,96 @@ int main() {
         
         // Use a perspective projection for better 3D visualization
         // Parameters: field of view, aspect ratio, near plane, far plane
-        float aspectRatio = 1.0f; // Assuming square window
+        float aspectRatio = static_cast<float>(windowWidth) / windowHeight;
         gluPerspective(45.0f, aspectRatio, 0.1f, 100.0f);
         
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         
-        float gridCenter = membrane.getGridSize() / 2.0f;
-        float gridSize = membrane.getGridSize();
-
-        // Position the camera to view the membrane from an angle
-        // Parameters: eyeX, eyeY, eyeZ, centerX, centerY, centerZ, upX, upY, upZ
+        // Use camera position to view the scene
         gluLookAt(
-            gridCenter - gridSize * 0.8f,  // Move camera left
-            gridCenter - gridSize * 0.5f,  // Move camera down slightly
-            gridSize * 0.9f,               // Keep camera above membrane
-            gridCenter, gridCenter, 0.0f,  // Still looking at center
-            0.0f, 0.0f, 1.0f               // Changed up vector to Z axis
+            cameraPos.x, cameraPos.y, cameraPos.z,
+            cameraTarget.x, cameraTarget.y, cameraTarget.z,
+            0.0f, 0.0f, 1.0f  // Up vector (Z is up)
         );
         
-        // Draw membrane using GL_POINTS
-        glPointSize(6.0f); // Make points larger and more visible
+        // Draw coordinate axes for reference
+        drawAxes();
         
-        // Draw the grid lines first (optional)
-        glColor3f(0.3f, 0.3f, 0.3f);
-        glBegin(GL_LINES);
-        for (int i = 0; i <= membrane.getGridSize(); i++) {
-            // Draw horizontal grid lines
-            glVertex3f(0, i, 0);
-            glVertex3f(membrane.getGridSize(), i, 0);
+        // Draw the airspace wireframe
+        drawAirSpace();
+        
+        if (showGrid) {
+            // Draw the grid lines
+            glColor3f(0.3f, 0.3f, 0.3f);
+            glBegin(GL_LINES);
+            for (int i = 0; i <= membrane.getGridSize(); i++) {
+                // Draw horizontal grid lines
+                glVertex3f(0, i, 0);
+                glVertex3f(membrane.getGridSize(), i, 0);
+                
+                // Draw vertical grid lines
+                glVertex3f(i, 0, 0);
+                glVertex3f(i, membrane.getGridSize(), 0);
+            }
+            glEnd();
+        }
+        
+        if (showMembrane) {
+            // Draw the membrane points
+            glBegin(GL_POINTS);
+            for (int y = 0; y < membrane.getGridSize(); y++) {
+                for (int x = 0; x < membrane.getGridSize(); x++) {
+                    if (membrane.isInsideCircle(x, y)) {
+                        // Get the current height from the simulation
+                        float height = membrane.getHeight(x, y);
+                        
+                        // Scale the height for better visibility
+                        float scaledHeight = height * 5.0f;
+                                            
+                        // Use a color gradient based on height
+                        float r = 0.0f;
+                        float g = 0.6f + scaledHeight * 0.4f;  // More green for positive heights
+                        float b = 1.0f - fabs(scaledHeight) * 0.5f;  // Less blue for extreme heights
+                        glColor3f(r, g, b);
+                        
+                        // Draw the point at its 3D position with Z coordinate showing height
+                        glVertex3f(x, y, scaledHeight);
+                    } else {
+                        // Gray for points outside membrane
+                        glColor3f(0.3f, 0.3f, 0.3f);
+                        glVertex3f(x, y, 0.0f);
+                    }
+                }
+            }
+            glEnd();
             
-            // Draw vertical grid lines
-            glVertex3f(i, 0, 0);
-            glVertex3f(i, membrane.getGridSize(), 0);
-        }
-        glEnd();
-        
-        // Draw the membrane points
-        glBegin(GL_POINTS);
-        for (int y = 0; y < membrane.getGridSize(); y++) {
-            for (int x = 0; x < membrane.getGridSize(); x++) {
-                if (membrane.isInsideCircle(x, y)) {
-                    // Get the current height from the simulation
-                    float height = membrane.getHeight(x, y);
-                    
-                    // Scale the height for better visibility
-                    float scaledHeight = height * 5.0f;
-                                        
-                    // Use a color gradient based on height
-                    float r = 0.0f;
-                    float g = 0.6f + scaledHeight * 0.4f;  // More green for positive heights
-                    float b = 1.0f - fabs(scaledHeight) * 0.5f;  // Less blue for extreme heights
-                    glColor3f(r, g, b);
-                    
-                    // Draw the point at its 3D position with Z coordinate showing height
-                    glVertex3f(x, y, scaledHeight);
-                } else {
-                    // Gray for points outside membrane
-                    glColor3f(0.3f, 0.3f, 0.3f);
-                    glVertex3f(x, y, 0.0f);
-                }
-            }
-        }
-        glEnd();
-        
-        // Draw connecting lines to represent the membrane surface as a wireframe mesh
-        glColor3f(0.0f, 0.4f, 0.8f);
-        glBegin(GL_LINES);
-        for (int y = 0; y < membrane.getGridSize(); y++) {
-            for (int x = 0; x < membrane.getGridSize(); x++) {
-                if (membrane.isInsideCircle(x, y)) {
-                    float height = membrane.getHeight(x, y) * 5.0f;
-                    
-                    // Connect horizontally if next point is also inside circle
-                    if (x + 1 < membrane.getGridSize() && membrane.isInsideCircle(x + 1, y)) {
-                        float nextHeight = membrane.getHeight(x + 1, y) * 5.0f;
-                        glVertex3f(x, y, height);
-                        glVertex3f(x + 1, y, nextHeight);
-                    }
-                    
-                    // Connect vertically if next point is also inside circle
-                    if (y + 1 < membrane.getGridSize() && membrane.isInsideCircle(x, y + 1)) {
-                        float nextHeight = membrane.getHeight(x, y + 1) * 5.0f;
-                        glVertex3f(x, y, height);
-                        glVertex3f(x, y + 1, nextHeight);
+            // Draw connecting lines to represent the membrane surface as a wireframe mesh
+            glColor3f(0.0f, 0.4f, 0.8f);
+            glBegin(GL_LINES);
+            for (int y = 0; y < membrane.getGridSize(); y++) {
+                for (int x = 0; x < membrane.getGridSize(); x++) {
+                    if (membrane.isInsideCircle(x, y)) {
+                        float height = membrane.getHeight(x, y) * 5.0f;
+                        
+                        // Connect horizontally if next point is also inside circle
+                        if (x + 1 < membrane.getGridSize() && membrane.isInsideCircle(x + 1, y)) {
+                            float nextHeight = membrane.getHeight(x + 1, y) * 5.0f;
+                            glVertex3f(x, y, height);
+                            glVertex3f(x + 1, y, nextHeight);
+                        }
+                        
+                        // Connect vertically if next point is also inside circle
+                        if (y + 1 < membrane.getGridSize() && membrane.isInsideCircle(x, y + 1)) {
+                            float nextHeight = membrane.getHeight(x, y + 1) * 5.0f;
+                            glVertex3f(x, y, height);
+                            glVertex3f(x, y + 1, nextHeight);
+                        }
                     }
                 }
             }
+            glEnd();
         }
-        glEnd();
         
         // Disable depth testing when done
         glDisable(GL_DEPTH_TEST);

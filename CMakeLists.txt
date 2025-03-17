@@ -15,12 +15,14 @@ set(SOURCES
     src/main.cpp
     src/membrane.cpp
     src/shader.cpp
+    src/airspace.cpp
 )
 
 # Define header files
 set(HEADERS
     include/membrane.h
     include/shader.h
+    include/airspace.h
 )
 
 # Main executable
