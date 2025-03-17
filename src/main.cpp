@@ -9,21 +9,21 @@
 #include "membrane.h"
 #include "shader.h"
 #include "airspace.h"
+#include "camera.h"  // Include the new camera header
 
 // Global variables
 unsigned int VAO, VBO;
 Shader* pointShader;
-DrumMembrane membrane(64, 20.0f, 10.0f, 0.1f);
+DrumMembrane membrane(128, 50.0f, 10.0f, 0.1f);
+const float impulseStrength = 1.0f;
 AirSpace* airSpace = nullptr;
 float lastFrameTime = 0.0f;
 
 // Mouse interaction variables
 bool mousePressed = false;
 
-// Camera variables
-glm::vec3 cameraPos;
-glm::vec3 cameraTarget;
-float cameraSpeed = 20.0f;
+// Camera object
+Camera* camera = nullptr;
 
 // Display controls
 bool showAirspace = true;
@@ -38,6 +38,9 @@ void printControls() {
     std::cout << "  A/D - Move left/right\n";
     std::cout << "  Q/E - Move up/down\n";
     
+    std::cout << "\nCamera Panning:\n";
+    std::cout << "  Arrow Keys - Pan camera view\n";
+    
     std::cout << "\nVisibility Toggles:\n";
     std::cout << "  1 - Toggle airspace visibility\n";
     std::cout << "  2 - Toggle membrane visibility\n";
@@ -48,47 +51,6 @@ void printControls() {
     std::cout << "  H - Show this help message\n";
     std::cout << "  ESC - Exit application\n";
     std::cout << "======================\n\n";
-}
-
-// Process keyboard input each frame
-void processKeyboardInput(GLFWwindow* window, float deltaTime) {
-    // Camera movement
-    float cameraActualSpeed = cameraSpeed * deltaTime;
-    
-    // Calculate camera vectors
-    glm::vec3 forward = glm::normalize(cameraTarget - cameraPos);
-    glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 0.0f, 1.0f)));
-    glm::vec3 up = glm::vec3(0.0f, 0.0f, 1.0f);
-    
-    // Forward/Backward
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-        cameraPos += forward * cameraActualSpeed;
-        cameraTarget += forward * cameraActualSpeed;
-    }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-        cameraPos -= forward * cameraActualSpeed;
-        cameraTarget -= forward * cameraActualSpeed;
-    }
-    
-    // Left/Right
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-        cameraPos -= right * cameraActualSpeed;
-        cameraTarget -= right * cameraActualSpeed;
-    }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-        cameraPos += right * cameraActualSpeed;
-        cameraTarget += right * cameraActualSpeed;
-    }
-    
-    // Up/Down
-    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
-        cameraPos += up * cameraActualSpeed;
-        cameraTarget += up * cameraActualSpeed;
-    }
-    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
-        cameraPos -= up * cameraActualSpeed;
-        cameraTarget -= up * cameraActualSpeed;
-    }
 }
 
 // Handle key press events (called by GLFW)
@@ -150,14 +112,10 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         float ndcY = 1.0f - (2.0f * ypos) / height;
         
         // Set up matrices (these should match your rendering matrices)
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 1.0f, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 1.0f, 0.1f, 1000.0f);
         
-        // Use current camera position
-        glm::mat4 view = glm::lookAt(
-            cameraPos,
-            cameraTarget,
-            glm::vec3(0.0f, 0.0f, 1.0f)
-        );
+        // Use current camera position and view matrix
+        glm::mat4 view = camera->getViewMatrix();
         
         // Create a ray from camera through clicked point
         glm::vec4 rayClip = glm::vec4(ndcX, ndcY, -1.0, 1.0);
@@ -170,7 +128,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         glm::vec3 rayDirection = glm::normalize(glm::vec3(rayWorld));
         
         // Origin of the ray (camera position)
-        glm::vec3 rayOrigin = cameraPos;
+        glm::vec3 rayOrigin = camera->getPosition();
         
         // Intersect ray with the membrane plane (z = 0)
         // P = O + t*D, where t = -(O.z) / D.z
@@ -186,7 +144,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         float normalizedY = gridY / membrane.getGridSize();
         
         // Apply impulse at the calculated position
-        membrane.applyImpulse(normalizedX, normalizedY, 0.5f);
+        membrane.applyImpulse(normalizedX, normalizedY, impulseStrength);
         
         std::cout << "Applied impulse at grid: " << gridX << ", " << gridY 
                   << " (normalized: " << normalizedX << ", " << normalizedY << ")" << std::endl;
@@ -314,6 +272,7 @@ void cleanupGL() {
     glDeleteVertexArrays(1, &VAO);
     delete pointShader;
     delete airSpace;
+    delete camera;  // Clean up camera
 }
 
 int main() {
@@ -378,8 +337,10 @@ int main() {
     float gridCenter = membrane.getGridSize() / 2.0f;
     float gridSize = membrane.getGridSize();
     
-    cameraPos = glm::vec3(gridCenter - gridSize * 0.8f, gridCenter - gridSize * 0.5f, gridSize * 0.9f);
-    cameraTarget = glm::vec3(gridCenter, gridCenter, 0.0f);
+    // Initialize camera with position and target
+    glm::vec3 initialPos = glm::vec3(gridCenter - gridSize * 0.8f, gridCenter - gridSize * 0.5f, gridSize * 0.9f);
+    glm::vec3 initialTarget = glm::vec3(gridCenter, gridCenter, 0.0f);
+    camera = new Camera(initialPos, initialTarget);
     
     // Print controls
     printControls();
@@ -391,8 +352,9 @@ int main() {
         float deltaTime = currentTime - lastFrameTime;
         lastFrameTime = currentTime;
         
-        // Process keyboard input for camera movement
-        processKeyboardInput(window, deltaTime);
+        // Process camera movement and panning with our new Camera class
+        camera->processMovement(window, deltaTime);
+        camera->processPanning(window, deltaTime);
         
         static float accumulator = 0.0f;
 
@@ -423,20 +385,16 @@ int main() {
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
         
-        // Use a perspective projection for better 3D visualization
-        // Parameters: field of view, aspect ratio, near plane, far plane
+        // Use a perspective projection with extended far plane for better visibility
         float aspectRatio = static_cast<float>(windowWidth) / windowHeight;
-        gluPerspective(45.0f, aspectRatio, 0.1f, 100.0f);
+        gluPerspective(45.0f, aspectRatio, 0.1f, 1000.0f);
         
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         
-        // Use camera position to view the scene
-        gluLookAt(
-            cameraPos.x, cameraPos.y, cameraPos.z,
-            cameraTarget.x, cameraTarget.y, cameraTarget.z,
-            0.0f, 0.0f, 1.0f  // Up vector (Z is up)
-        );
+        // Use camera's view matrix
+        glm::mat4 viewMatrix = camera->getViewMatrix();
+        glMultMatrixf(glm::value_ptr(viewMatrix));
         
         // Draw coordinate axes for reference
         drawAxes();
@@ -462,6 +420,7 @@ int main() {
         
         if (showMembrane) {
             // Draw the membrane points
+            glPointSize(3.0f);
             glBegin(GL_POINTS);
             for (int y = 0; y < membrane.getGridSize(); y++) {
                 for (int x = 0; x < membrane.getGridSize(); x++) {

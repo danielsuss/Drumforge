@@ -16,6 +16,7 @@ set(SOURCES
     src/membrane.cpp
     src/shader.cpp
     src/airspace.cpp
+    src/camera.cpp
 )
 
 # Define header files
@@ -23,6 +24,7 @@ set(HEADERS
     include/membrane.h
     include/shader.h
     include/airspace.h
+    include/camera.h
 )
 
 # Main executable
