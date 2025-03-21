@@ -48,6 +48,21 @@ public:
 
     void updateSimulation(float timestep);  // Main simulation step function
     void setBoundaryConditions();          // Handle membrane boundary
+    
+    // Calculate a stable timestep for the membrane simulation
+    float calculateStableTimestep() const {
+        // Calculate wave propagation speed (c) for a membrane
+        float c = sqrt(tension);  // Wave speed depends on tension
+        
+        // Grid spacing (normalized to 1.0 in our simulation)
+        float dx = 1.0f;
+        
+        // CFL condition for 2D wave equation: dt <= dx / (c * sqrt(2))
+        float cflTimestep = dx / (c * sqrt(2.0f));
+        
+        // Use 80% of CFL condition for safety
+        return 0.8f * cflTimestep;
+    }
 };
 
 #endif // DRUMFORGE_MEMBRANE_H

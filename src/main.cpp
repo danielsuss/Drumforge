@@ -328,6 +328,29 @@ void cleanupGL() {
     delete camera;  // Clean up camera
 }
 
+// Calculate a stable timestep that works for both membrane and airspace simulations
+float calculateStableTimestep(const DrumMembrane& membrane, const AirSpace& airSpace) {
+    // Get stable timestep for membrane using the new method
+    float membraneTimestep = membrane.calculateStableTimestep();
+
+    // Get stable timestep for airspace
+    float airspaceTimestep = airSpace.calculateStableTimestep();
+    
+    // Output both timesteps for debugging
+    std::cout << "Membrane stable timestep: " << membraneTimestep << std::endl;
+    std::cout << "Airspace stable timestep: " << airspaceTimestep << std::endl;
+    
+    // Use the smaller (more restrictive) of the two timesteps
+    float stableTimestep = std::min(membraneTimestep, airspaceTimestep);
+    
+    // Add a safety margin (90% of the stable value)
+    stableTimestep *= 0.9f;
+    
+    std::cout << "Using combined stable timestep: " << stableTimestep << " seconds" << std::endl;
+    
+    return stableTimestep;
+}
+
 int main() {
     std::cout << "DrumForge initializing..." << std::endl;
     
@@ -390,6 +413,9 @@ int main() {
     // Print controls
     printControls();
 
+    // const float fixedPhysicsTimestep = calculateStableTimestep(membrane, airSpace);
+    const float fixedPhysicsTimestep = 0.2f;
+
     // Main rendering loop
     while (!glfwWindowShouldClose(window)) {
         // Calculate delta time
@@ -405,7 +431,6 @@ int main() {
 
         // Global variables
         float simulationSpeed = 10.0f;  // How much faster than real-time to run
-        const float fixedPhysicsTimestep = 1.0f / 5.0f;  // Keep this constant for consistent physics
 
         // Update simulation with fixed time step for stability but apply simulation speed
         accumulator += deltaTime * simulationSpeed;
