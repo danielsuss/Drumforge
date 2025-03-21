@@ -328,29 +328,6 @@ void cleanupGL() {
     delete camera;  // Clean up camera
 }
 
-// Calculate a stable timestep that works for both membrane and airspace simulations
-float calculateStableTimestep(const DrumMembrane& membrane, const AirSpace& airSpace) {
-    // Get stable timestep for membrane using the new method
-    float membraneTimestep = membrane.calculateStableTimestep();
-
-    // Get stable timestep for airspace
-    float airspaceTimestep = airSpace.calculateStableTimestep();
-    
-    // Output both timesteps for debugging
-    std::cout << "Membrane stable timestep: " << membraneTimestep << std::endl;
-    std::cout << "Airspace stable timestep: " << airspaceTimestep << std::endl;
-    
-    // Use the smaller (more restrictive) of the two timesteps
-    float stableTimestep = std::min(membraneTimestep, airspaceTimestep);
-    
-    // Add a safety margin (90% of the stable value)
-    stableTimestep *= 0.9f;
-    
-    std::cout << "Using combined stable timestep: " << stableTimestep << " seconds" << std::endl;
-    
-    return stableTimestep;
-}
-
 int main() {
     std::cout << "DrumForge initializing..." << std::endl;
     
@@ -413,8 +390,25 @@ int main() {
     // Print controls
     printControls();
 
-    // const float fixedPhysicsTimestep = calculateStableTimestep(membrane, airSpace);
-    const float fixedPhysicsTimestep = 0.2f;
+    // Calculate stable timesteps
+    float membraneStableTimestep = membrane.calculateStableTimestep();
+    float airspaceStableTimestep = airSpace.calculateStableTimestep();
+
+    // Add safety margin (90% of the stable values)
+    membraneStableTimestep *= 0.9f;
+    airspaceStableTimestep *= 0.9f;
+
+    // Use the membrane timestep for visual updates (larger)
+    const float physicsTimestep = membraneStableTimestep;
+
+    // Calculate how many airspace steps we need per membrane step
+    const int airspaceSubSteps = std::max(1, static_cast<int>(ceil(physicsTimestep / airspaceStableTimestep)));
+
+    std::cout << "Membrane stable timestep: " << membraneStableTimestep << " seconds" << std::endl;
+    std::cout << "Airspace stable timestep: " << airspaceStableTimestep << " seconds" << std::endl;
+    std::cout << "Using membrane timestep: " << physicsTimestep << " with " 
+            << airspaceSubSteps << " airspace sub-steps" << std::endl;
+
 
     // Main rendering loop
     while (!glfwWindowShouldClose(window)) {
@@ -423,23 +417,32 @@ int main() {
         float deltaTime = currentTime - lastFrameTime;
         lastFrameTime = currentTime;
         
-        // Process camera movement and panning with our new Camera class
+        // Process camera movement and panning with our Camera class
         camera->processMovement(window, deltaTime);
         camera->processPanning(window, deltaTime);
         
         static float accumulator = 0.0f;
 
-        // Global variables
-        float simulationSpeed = 10.0f;  // How much faster than real-time to run
-
+        // How much faster than real-time to run simulation
+        float simulationSpeed = 10.0f;  
+        
         // Update simulation with fixed time step for stability but apply simulation speed
         accumulator += deltaTime * simulationSpeed;
 
-        // Run physics updates with the SAME fixed timestep
-        while (accumulator >= fixedPhysicsTimestep) {
-            membrane.updateSimulation(fixedPhysicsTimestep);
-            airSpace.updateSimulation(fixedPhysicsTimestep);  // Now with timestep parameter
-            accumulator -= fixedPhysicsTimestep;
+        // Run physics updates with fixed timestep
+        while (accumulator >= physicsTimestep) {
+            // Update membrane once per step
+            membrane.updateSimulation(physicsTimestep);
+            
+            // Update airspace with multiple smaller steps if needed
+            // float airspaceStepTime = physicsTimestep / airspaceSubSteps;
+            // for (int i = 0; i < airspaceSubSteps; i++) {
+            //     airSpace.updateSimulation(airspaceStepTime);
+            // }
+
+            airSpace.updateSimulation(physicsTimestep);
+            
+            accumulator -= physicsTimestep;
         }
         
         // Update vertex data after physics simulation
