@@ -61,7 +61,7 @@ public:
     void setTimestep(float dt);
     
     // Main simulation step
-    void updateSimulation();
+    void updateSimulation(float timestep);
     
     // Apply boundary conditions
     void applyBoundaryConditions();

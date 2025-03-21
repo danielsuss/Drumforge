@@ -66,7 +66,16 @@ void AirSpace::setTimestep(float dt) {
     timestep = dt;
 }
 
-void AirSpace::updateSimulation() {
+void AirSpace::updateSimulation(float timestep) {
+    // Validate the provided timestep for stability
+    float stableTimestep = calculateStableTimestep();
+    
+    // If the provided timestep is too large, use the stable one instead
+    float safeTimestep = (timestep > stableTimestep) ? stableTimestep : timestep;
+    
+    // Store for internal use (this is optional, only needed if other methods need access)
+    this->timestep = safeTimestep;
+    
     // 1. Update velocity components based on pressure gradients
     for (int z = 0; z < sizeZ; z++) {
         for (int y = 0; y < sizeY; y++) {
@@ -76,7 +85,7 @@ void AirSpace::updateSimulation() {
                 
                 // X-velocity update (pressure gradient in x direction)
                 float pressureGradientX = (pressure[getIndex(x, y, z)] - pressure[getIndex(x-1, y, z)]) / cellSize;
-                velocityX[getVelocityXIndex(x, y, z)] -= (timestep / density) * pressureGradientX;
+                velocityX[getVelocityXIndex(x, y, z)] -= (safeTimestep / density) * pressureGradientX;
             }
         }
     }
@@ -89,7 +98,7 @@ void AirSpace::updateSimulation() {
                 
                 // Y-velocity update (pressure gradient in y direction)
                 float pressureGradientY = (pressure[getIndex(x, y, z)] - pressure[getIndex(x, y-1, z)]) / cellSize;
-                velocityY[getVelocityYIndex(x, y, z)] -= (timestep / density) * pressureGradientY;
+                velocityY[getVelocityYIndex(x, y, z)] -= (safeTimestep / density) * pressureGradientY;
             }
         }
     }
@@ -102,7 +111,7 @@ void AirSpace::updateSimulation() {
                 
                 // Z-velocity update (pressure gradient in z direction)
                 float pressureGradientZ = (pressure[getIndex(x, y, z)] - pressure[getIndex(x, y, z-1)]) / cellSize;
-                velocityZ[getVelocityZIndex(x, y, z)] -= (timestep / density) * pressureGradientZ;
+                velocityZ[getVelocityZIndex(x, y, z)] -= (safeTimestep / density) * pressureGradientZ;
             }
         }
     }
@@ -121,7 +130,7 @@ void AirSpace::updateSimulation() {
                     (velocityZ[getVelocityZIndex(x, y, z+1)] - velocityZ[getVelocityZIndex(x, y, z)]) / cellSize;
                 
                 // Update pressure using acoustic wave equation
-                float pressureChange = -density * speedOfSound * speedOfSound * timestep * velocityDivergence;
+                float pressureChange = -density * speedOfSound * speedOfSound * safeTimestep * velocityDivergence;
                 
                 // Apply damping for stability
                 pressure[getIndex(x, y, z)] = prevPressure[getIndex(x, y, z)] + pressureChange - 

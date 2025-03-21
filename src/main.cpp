@@ -15,8 +15,9 @@
 unsigned int VAO, VBO;
 Shader* pointShader;
 DrumMembrane membrane(32, 10.0f, 10.0f, 0.1f);
+// Change from pointer to object
+AirSpace airSpace(32, 32, 16, 1.0f); 
 const float impulseStrength = 0.1f;
-AirSpace* airSpace = nullptr;
 float lastFrameTime = 0.0f;
 
 // Mouse interaction variables
@@ -48,20 +49,22 @@ void printControls() {
     
     std::cout << "\nOther Controls:\n";
     std::cout << "  R - Reset membrane to flat state\n";
+    std::cout << "  P - Add pressure impulse to airspace\n";
     std::cout << "  H - Show this help message\n";
     std::cout << "  ESC - Exit application\n";
     std::cout << "======================\n\n";
 }
 
 void addTestImpulse() {
-    if (!airSpace) return;
+    if (!showAirspace) return;
     
     // Add a pressure impulse in the center of the airspace
-    float centerX = airSpace->getSizeX() / 2.0f;
-    float centerY = airSpace->getSizeY() / 2.0f;
-    float centerZ = airSpace->getSizeZ() / 2.0f;
+    float centerX = airSpace.getSizeX() / 2.0f;
+    float centerY = airSpace.getSizeY() / 2.0f;
+    float centerZ = airSpace.getSizeZ() / 2.0f;
     
-    airSpace->addPressureImpulse(centerX, centerY, centerZ, 10.0f, 5.0f);
+    airSpace.addPressureImpulse(centerX, centerY, centerZ, 10.0f, 5.0f);
+    std::cout << "Added pressure impulse at center: (" << centerX << ", " << centerY << ", " << centerZ << ")" << std::endl;
 }
 
 // Handle key press events (called by GLFW)
@@ -105,7 +108,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
         case GLFW_KEY_P:  // Press 'P' to add a pressure impulse
             addTestImpulse();
-            std::cout << "Added pressure impulse to airspace" << std::endl;
             break;
     }
 }
@@ -171,15 +173,15 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 // Draw AirSpace as a wireframe cube
 void drawAirSpace() {
-    if (!airSpace || !showAirspace) return;
+    if (!showAirspace) return;
     
     // Get dimensions
-    float minX = airSpace->getPosX();
-    float minY = airSpace->getPosY();
-    float minZ = airSpace->getPosZ();
-    float maxX = minX + airSpace->getSizeX() * airSpace->getCellSize();
-    float maxY = minY + airSpace->getSizeY() * airSpace->getCellSize();
-    float maxZ = minZ + airSpace->getSizeZ() * airSpace->getCellSize();
+    float minX = airSpace.getPosX();
+    float minY = airSpace.getPosY();
+    float minZ = airSpace.getPosZ();
+    float maxX = minX + airSpace.getSizeX() * airSpace.getCellSize();
+    float maxY = minY + airSpace.getSizeY() * airSpace.getCellSize();
+    float maxZ = minZ + airSpace.getSizeZ() * airSpace.getCellSize();
     
     // Set cube color to red
     glColor3f(1.0f, 0.0f, 0.0f);
@@ -214,21 +216,21 @@ void drawAirSpace() {
 
 // 2. Modify the drawAirSpacePressure function to use the public method:
 void drawAirSpacePressure() {
-    if (!airSpace || !showAirspace) return;
+    if (!showAirspace) return;
     
     // Get pressure field for visualization
-    const std::vector<float>& pressureField = airSpace->getPressureField();
+    const std::vector<float>& pressureField = airSpace.getPressureField();
     
     // Draw a slice at some fixed Y value to see the pressure waves
-    int sliceY = airSpace->getSizeY() / 2;
+    int sliceY = airSpace.getSizeY() / 2;
     
     glPointSize(3.0f);
     glBegin(GL_POINTS);
     
-    for (int z = 0; z < airSpace->getSizeZ(); z++) {
-        for (int x = 0; x < airSpace->getSizeX(); x++) {
+    for (int z = 0; z < airSpace.getSizeZ(); z++) {
+        for (int x = 0; x < airSpace.getSizeX(); x++) {
             // Get pressure at this point using the new public method
-            float pressure = airSpace->getPressureAtGrid(x, sliceY, z);
+            float pressure = airSpace.getPressureAtGrid(x, sliceY, z);
             
             // Map pressure to color (blue for negative, white for zero, red for positive)
             float red = pressure > 0 ? pressure / 10.0f : 0.0f;
@@ -323,7 +325,6 @@ void cleanupGL() {
     glDeleteBuffers(1, &VBO);
     glDeleteVertexArrays(1, &VAO);
     delete pointShader;
-    delete airSpace;
     delete camera;  // Clean up camera
 }
 
@@ -374,16 +375,8 @@ int main() {
     // Setup membrane and initial buffer data
     updateVertexData();
     
-    // Initialize AirSpace
-    airSpace = new AirSpace(
-        membrane.getGridSize(),  // Same width as membrane
-        membrane.getGridSize(),  // Same height as membrane
-        membrane.getGridSize()/2,  // Half the height for Z dimension
-        1.0f  // Each cell is 1.0 world units
-    );
-    
     // Position the airspace to align with the membrane
-    airSpace->setPosition(0.0f, 0.0f, 0.0f);
+    airSpace.setPosition(0.0f, 0.0f, 0.0f);
     
     // Set up initial camera position
     float gridCenter = membrane.getGridSize() / 2.0f;
@@ -416,13 +409,12 @@ int main() {
 
         // Update simulation with fixed time step for stability but apply simulation speed
         accumulator += deltaTime * simulationSpeed;
-        airSpace->setTimestep(fixedPhysicsTimestep);
 
         // Run physics updates with the SAME fixed timestep
         while (accumulator >= fixedPhysicsTimestep) {
             membrane.updateSimulation(fixedPhysicsTimestep);
+            airSpace.updateSimulation(fixedPhysicsTimestep);  // Now with timestep parameter
             accumulator -= fixedPhysicsTimestep;
-            airSpace->updateSimulation();
         }
         
         // Update vertex data after physics simulation
