@@ -14,8 +14,8 @@
 // Global variables
 unsigned int VAO, VBO;
 Shader* pointShader;
-DrumMembrane membrane(128, 50.0f, 10.0f, 0.1f);
-const float impulseStrength = 1.0f;
+DrumMembrane membrane(32, 10.0f, 10.0f, 0.1f);
+const float impulseStrength = 0.1f;
 AirSpace* airSpace = nullptr;
 float lastFrameTime = 0.0f;
 
@@ -194,6 +194,50 @@ void drawAirSpace() {
     
     // Reset line width
     glLineWidth(1.0f);
+}
+
+// Add a pressure impulse in the center of the airspace
+float centerX = airSpace->getSizeX() / 2.0f;
+float centerY = airSpace->getSizeY() / 2.0f;
+float centerZ = airSpace->getSizeZ() / 2.0f;
+
+airSpace->addPressureImpulse(centerX, centerY, centerZ, 10.0f, 5.0f);
+
+// In the rendering loop, add visualization for pressure:
+// This would show the pressure waves as they propagate
+void drawAirSpacePressure() {
+    if (!airSpace || !showAirspace) return;
+    
+    // Get pressure field for visualization
+    const std::vector<float>& pressureField = airSpace->getPressureField();
+    
+    // Draw a slice at some fixed Y value to see the pressure waves
+    int sliceY = airSpace->getSizeY() / 2;
+    
+    glPointSize(3.0f);
+    glBegin(GL_POINTS);
+    
+    for (int z = 0; z < airSpace->getSizeZ(); z++) {
+        for (int x = 0; x < airSpace->getSizeX(); x++) {
+            // Get pressure at this point
+            float pressure = pressureField[airSpace->getIndex(x, sliceY, z)];
+            
+            // Map pressure to color (blue for negative, white for zero, red for positive)
+            float red = pressure > 0 ? pressure / 10.0f : 0.0f;
+            float blue = pressure < 0 ? -pressure / 10.0f : 0.0f;
+            float green = 0.0f;
+            
+            // Clamp colors to [0,1]
+            red = std::min(1.0f, std::max(0.0f, red));
+            blue = std::min(1.0f, std::max(0.0f, blue));
+            
+            // Draw the point
+            glColor3f(red, green, blue);
+            glVertex3f(x, sliceY, z);
+        }
+    }
+    
+    glEnd();
 }
 
 // Draw XYZ axes at origin
