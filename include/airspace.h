@@ -72,6 +72,15 @@ public:
     // Virtual microphone: get pressure at a specific position
     float getPressureAt(float x, float y, float z) const;
     
+    // Get pressure at specific grid coordinates (not world coordinates)
+    float getPressureAtGrid(int x, int y, int z) const {
+        // Bounds checking
+        if (x < 0 || x >= sizeX || y < 0 || y >= sizeY || z < 0 || z >= sizeZ) {
+            return 0.0f;
+        }
+        return pressure[getIndex(x, y, z)];
+    }
+    
     // Set position in world coordinates
     void setPosition(float x, float y, float z);
     

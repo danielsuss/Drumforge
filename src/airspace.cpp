@@ -54,15 +54,16 @@ float AirSpace::calculateStableTimestep() const {
 }
 
 void AirSpace::setTimestep(float dt) {
-    float stableTimestep = calculateStableTimestep();
+    // float stableTimestep = calculateStableTimestep();
     
-    if (dt > stableTimestep) {
-        std::cout << "Warning: Requested timestep " << dt << " exceeds stable timestep " 
-                  << stableTimestep << ". Using stable timestep instead." << std::endl;
-        timestep = stableTimestep;
-    } else {
-        timestep = dt;
-    }
+    // if (dt > stableTimestep) {
+    //     std::cout << "Warning: Requested timestep " << dt << " exceeds stable timestep " 
+    //               << stableTimestep << ". Using stable timestep instead." << std::endl;
+    //     timestep = stableTimestep;
+    // } else {
+    //     timestep = dt;
+    // }
+    timestep = dt;
 }
 
 void AirSpace::updateSimulation() {

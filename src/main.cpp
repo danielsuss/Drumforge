@@ -53,6 +53,17 @@ void printControls() {
     std::cout << "======================\n\n";
 }
 
+void addTestImpulse() {
+    if (!airSpace) return;
+    
+    // Add a pressure impulse in the center of the airspace
+    float centerX = airSpace->getSizeX() / 2.0f;
+    float centerY = airSpace->getSizeY() / 2.0f;
+    float centerZ = airSpace->getSizeZ() / 2.0f;
+    
+    airSpace->addPressureImpulse(centerX, centerY, centerZ, 10.0f, 5.0f);
+}
+
 // Handle key press events (called by GLFW)
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     // Only handle key press events (not repeat or release)
@@ -90,6 +101,11 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         // Exit application
         case GLFW_KEY_ESCAPE:
             glfwSetWindowShouldClose(window, GLFW_TRUE);
+            break;
+
+        case GLFW_KEY_P:  // Press 'P' to add a pressure impulse
+            addTestImpulse();
+            std::cout << "Added pressure impulse to airspace" << std::endl;
             break;
     }
 }
@@ -196,15 +212,7 @@ void drawAirSpace() {
     glLineWidth(1.0f);
 }
 
-// Add a pressure impulse in the center of the airspace
-float centerX = airSpace->getSizeX() / 2.0f;
-float centerY = airSpace->getSizeY() / 2.0f;
-float centerZ = airSpace->getSizeZ() / 2.0f;
-
-airSpace->addPressureImpulse(centerX, centerY, centerZ, 10.0f, 5.0f);
-
-// In the rendering loop, add visualization for pressure:
-// This would show the pressure waves as they propagate
+// 2. Modify the drawAirSpacePressure function to use the public method:
 void drawAirSpacePressure() {
     if (!airSpace || !showAirspace) return;
     
@@ -219,8 +227,8 @@ void drawAirSpacePressure() {
     
     for (int z = 0; z < airSpace->getSizeZ(); z++) {
         for (int x = 0; x < airSpace->getSizeX(); x++) {
-            // Get pressure at this point
-            float pressure = pressureField[airSpace->getIndex(x, sliceY, z)];
+            // Get pressure at this point using the new public method
+            float pressure = airSpace->getPressureAtGrid(x, sliceY, z);
             
             // Map pressure to color (blue for negative, white for zero, red for positive)
             float red = pressure > 0 ? pressure / 10.0f : 0.0f;
@@ -408,11 +416,13 @@ int main() {
 
         // Update simulation with fixed time step for stability but apply simulation speed
         accumulator += deltaTime * simulationSpeed;
+        airSpace->setTimestep(fixedPhysicsTimestep);
 
         // Run physics updates with the SAME fixed timestep
         while (accumulator >= fixedPhysicsTimestep) {
             membrane.updateSimulation(fixedPhysicsTimestep);
             accumulator -= fixedPhysicsTimestep;
+            airSpace->updateSimulation();
         }
         
         // Update vertex data after physics simulation
@@ -518,6 +528,8 @@ int main() {
             }
             glEnd();
         }
+
+        drawAirSpacePressure();
         
         // Disable depth testing when done
         glDisable(GL_DEPTH_TEST);
