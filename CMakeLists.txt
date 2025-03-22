@@ -54,6 +54,7 @@ set(SOURCES_PARALLEL
     parallel/src/main.cpp
     parallel/src/cuda_memory_manager.cu
     parallel/src/simulation_manager.cpp
+    parallel/src/cuda_gl_buffer.cu
 )
 
 # Parallel header files
@@ -61,6 +62,7 @@ set(HEADERS_PARALLEL
     parallel/include/cuda_memory_manager.h
     parallel/include/component_interface.h
     parallel/include/simulation_manager.h
+    parallel/include/cuda_gl_buffer.h
 )
 
 # Legacy executable

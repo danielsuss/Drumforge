@@ -6,12 +6,7 @@
 #define NOMINMAX // Prevent Windows from defining min/max macros
 #endif
 
-// Include OpenGL headers first
-#include <GL/glew.h>
-
-// Then include CUDA headers
 #include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
 
 #include <vector>
 #include <string>
@@ -126,135 +121,8 @@ public:
     size_t bytes() const { return byteSize; }
 };
 
-// New class for CUDA-OpenGL interoperable buffers
-template<typename T>
-class CudaGLBuffer {
-private:
-    GLuint glBufferId;                    // OpenGL buffer ID
-    cudaGraphicsResource_t cudaResource;  // CUDA graphics resource
-    T* devicePtr;                         // Device pointer when mapped
-    size_t elementCount;                  // Number of elements
-    size_t byteSize;                      // Size in bytes
-    bool isMapped;                        // Whether buffer is currently mapped
-
-public:
-    // Constructor and destructor
-    CudaGLBuffer()
-        : glBufferId(0), cudaResource(nullptr), devicePtr(nullptr),
-          elementCount(0), byteSize(0), isMapped(false) {}
-    
-    CudaGLBuffer(GLuint bufferId, size_t count, cudaGraphicsRegisterFlags flags = cudaGraphicsRegisterFlagsNone)
-        : glBufferId(0), cudaResource(nullptr), devicePtr(nullptr),
-          elementCount(0), byteSize(0), isMapped(false) {
-        registerBuffer(bufferId, count, flags);
-    }
-    
-    ~CudaGLBuffer() {
-        unregisterBuffer();
-    }
-    
-    // Prevent copying
-    CudaGLBuffer(const CudaGLBuffer&) = delete;
-    CudaGLBuffer& operator=(const CudaGLBuffer&) = delete;
-    
-    // Allow moving
-    CudaGLBuffer(CudaGLBuffer&& other) noexcept 
-        : glBufferId(other.glBufferId), cudaResource(other.cudaResource),
-          devicePtr(other.devicePtr), elementCount(other.elementCount),
-          byteSize(other.byteSize), isMapped(other.isMapped) {
-        other.glBufferId = 0;
-        other.cudaResource = nullptr;
-        other.devicePtr = nullptr;
-        other.elementCount = 0;
-        other.byteSize = 0;
-        other.isMapped = false;
-    }
-    
-    CudaGLBuffer& operator=(CudaGLBuffer&& other) noexcept {
-        if (this != &other) {
-            unregisterBuffer();
-            glBufferId = other.glBufferId;
-            cudaResource = other.cudaResource;
-            devicePtr = other.devicePtr;
-            elementCount = other.elementCount;
-            byteSize = other.byteSize;
-            isMapped = other.isMapped;
-            other.glBufferId = 0;
-            other.cudaResource = nullptr;
-            other.devicePtr = nullptr;
-            other.elementCount = 0;
-            other.byteSize = 0;
-            other.isMapped = false;
-        }
-        return *this;
-    }
-    
-    // Register an OpenGL buffer with CUDA
-    void registerBuffer(GLuint bufferId, size_t count, cudaGraphicsRegisterFlags flags = cudaGraphicsRegisterFlagsNone) {
-        unregisterBuffer();
-        
-        glBufferId = bufferId;
-        elementCount = count;
-        byteSize = count * sizeof(T);
-        
-        CUDA_CHECK(cudaGraphicsGLRegisterBuffer(&cudaResource, glBufferId, flags));
-    }
-    
-    // Unregister the buffer
-    void unregisterBuffer() {
-        if (isMapped) {
-            unmap();
-        }
-        
-        if (cudaResource != nullptr) {
-            CUDA_CHECK(cudaGraphicsUnregisterResource(cudaResource));
-            cudaResource = nullptr;
-        }
-        
-        glBufferId = 0;
-        elementCount = 0;
-        byteSize = 0;
-    }
-    
-    // Map the buffer for CUDA access
-    T* map() {
-        if (!cudaResource) {
-            throw CudaException("Cannot map unregistered buffer");
-        }
-        
-        if (!isMapped) {
-            CUDA_CHECK(cudaGraphicsMapResources(1, &cudaResource));
-            size_t size;
-            CUDA_CHECK(cudaGraphicsResourceGetMappedPointer((void**)&devicePtr, &size, cudaResource));
-            isMapped = true;
-        }
-        
-        return devicePtr;
-    }
-    
-    // Unmap the buffer
-    void unmap() {
-        if (cudaResource && isMapped) {
-            CUDA_CHECK(cudaGraphicsUnmapResources(1, &cudaResource));
-            isMapped = false;
-            devicePtr = nullptr;
-        }
-    }
-    
-    // Getters
-    T* getDevicePtr() const { 
-        if (!isMapped) {
-            throw CudaException("Buffer not mapped, cannot access device pointer");
-        }
-        return devicePtr; 
-    }
-    
-    GLuint getGLBufferId() const { return glBufferId; }
-    size_t size() const { return elementCount; }
-    size_t bytes() const { return byteSize; }
-    bool isRegistered() const { return cudaResource != nullptr; }
-    bool isMappedForCUDA() const { return isMapped; }
-};
+// Forward declarations for OpenGL interoperability functions
+// These will be implemented in a separate .cu file
 
 // Main memory manager class
 class CudaMemoryManager {
@@ -292,17 +160,6 @@ public:
         return buffer;
     }
     
-    // Create and manage a CUDA-GL interop buffer
-    template<typename T>
-    std::shared_ptr<CudaGLBuffer<T>> registerGLBuffer(GLuint bufferId, size_t count, 
-                                                     cudaGraphicsRegisterFlags flags = cudaGraphicsRegisterFlagsNone) {
-        auto buffer = std::make_shared<CudaGLBuffer<T>>(bufferId, count, flags);
-        return buffer;
-    }
-    
-    // Check if CUDA-OpenGL interop is supported on this device
-    bool isGLInteropSupported();
-    
     // Synchronize device
     void synchronize() {
         CUDA_CHECK(cudaDeviceSynchronize());
@@ -310,6 +167,9 @@ public:
     
     // Get device properties
     cudaDeviceProp getDeviceProperties();
+    
+    // Check if CUDA-OpenGL interop is supported on this device
+    bool isGLInteropSupported();
 };
 
 } // namespace drumforge
