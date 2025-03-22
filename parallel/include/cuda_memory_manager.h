@@ -7,9 +7,6 @@
 #include <memory>
 #include <stdexcept>
 
-// Forward declarations for CUDA-OpenGL interop
-typedef unsigned int GLuint;
-
 namespace drumforge {
 
 // Simple exception class for CUDA errors
@@ -31,13 +28,12 @@ private:
     T* devicePtr;
     size_t elementCount;
     size_t byteSize;
-    bool mapped;
     
 public:
-    CudaBuffer() : devicePtr(nullptr), elementCount(0), byteSize(0), mapped(false) {}
+    CudaBuffer() : devicePtr(nullptr), elementCount(0), byteSize(0) {}
     
     CudaBuffer(size_t count) : devicePtr(nullptr), elementCount(count), 
-                            byteSize(count * sizeof(T)), mapped(false) {
+                            byteSize(count * sizeof(T)) {
         CUDA_CHECK(cudaMalloc(&devicePtr, byteSize));
     }
     
@@ -52,11 +48,10 @@ public:
     // Allow moving
     CudaBuffer(CudaBuffer&& other) noexcept 
         : devicePtr(other.devicePtr), elementCount(other.elementCount), 
-          byteSize(other.byteSize), mapped(other.mapped) {
+          byteSize(other.byteSize) {
         other.devicePtr = nullptr;
         other.elementCount = 0;
         other.byteSize = 0;
-        other.mapped = false;
     }
     
     CudaBuffer& operator=(CudaBuffer&& other) noexcept {
@@ -65,11 +60,9 @@ public:
             devicePtr = other.devicePtr;
             elementCount = other.elementCount;
             byteSize = other.byteSize;
-            mapped = other.mapped;
             other.devicePtr = nullptr;
             other.elementCount = 0;
             other.byteSize = 0;
-            other.mapped = false;
         }
         return *this;
     }
@@ -90,7 +83,6 @@ public:
         }
         elementCount = 0;
         byteSize = 0;
-        mapped = false;
     }
     
     // Copy data from host to device
@@ -121,76 +113,6 @@ public:
     T* get() const { return devicePtr; }
     size_t size() const { return elementCount; }
     size_t bytes() const { return byteSize; }
-    bool isMapped() const { return mapped; }
-    
-    // Set mapped status (used by memory manager)
-    void setMapped(bool status) { mapped = status; }
-};
-
-// Class for CUDA-OpenGL interoperability buffer
-class CudaGLBuffer {
-private:
-    struct cudaGraphicsResource* resource;
-    size_t size;
-    GLuint glBuffer;
-    bool mapped;
-    
-public:
-    CudaGLBuffer() : resource(nullptr), size(0), glBuffer(0), mapped(false) {}
-    
-    ~CudaGLBuffer() {
-        unregister();
-    }
-    
-    // Register an OpenGL buffer with CUDA
-    void registerBuffer(GLuint buffer, unsigned int flags) {
-        unregister();
-        glBuffer = buffer;
-        CUDA_CHECK(cudaGraphicsGLRegisterBuffer(&resource, buffer, flags));
-    }
-    
-    // Unregister the buffer
-    void unregister() {
-        if (resource != nullptr) {
-            if (mapped) {
-                CUDA_CHECK(cudaGraphicsUnmapResources(1, &resource));
-                mapped = false;
-            }
-            CUDA_CHECK(cudaGraphicsUnregisterResource(resource));
-            resource = nullptr;
-        }
-        glBuffer = 0;
-    }
-    
-    // Map for access from CUDA
-    void* map() {
-        if (resource == nullptr) {
-            throw CudaException("Cannot map unregistered GL buffer");
-        }
-        
-        void* devicePtr = nullptr;
-        
-        CUDA_CHECK(cudaGraphicsMapResources(1, &resource));
-        CUDA_CHECK(cudaGraphicsResourceGetMappedPointer(&devicePtr, &size, resource));
-        
-        mapped = true;
-        return devicePtr;
-    }
-    
-    // Unmap after CUDA access
-    void unmap() {
-        if (resource == nullptr || !mapped) {
-            return;
-        }
-        
-        CUDA_CHECK(cudaGraphicsUnmapResources(1, &resource));
-        mapped = false;
-    }
-    
-    // Getters
-    GLuint getGLBuffer() const { return glBuffer; }
-    size_t getSize() const { return size; }
-    bool isMapped() const { return mapped; }
 };
 
 // Main memory manager class
@@ -198,8 +120,6 @@ class CudaMemoryManager {
 private:
     // Track all allocated buffers for potential cleanup
     std::vector<void*> allocatedBuffers;
-    // Track all registered GL buffers
-    std::vector<CudaGLBuffer*> registeredGLBuffers;
     
     // Singleton instance
     static CudaMemoryManager* instance;
@@ -230,9 +150,6 @@ public:
         allocatedBuffers.push_back(buffer.get());
         return buffer;
     }
-    
-    // Register an OpenGL buffer for CUDA interop
-    std::shared_ptr<CudaGLBuffer> registerGLBuffer(GLuint buffer, unsigned int flags);
     
     // Synchronize device
     void synchronize() {

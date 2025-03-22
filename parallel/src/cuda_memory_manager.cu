@@ -57,27 +57,11 @@ void CudaMemoryManager::initialize() {
 
 // Shut down and release all resources
 void CudaMemoryManager::shutdown() {
-    // Clean up GL buffer resources
-    for (auto buffer : registeredGLBuffers) {
-        if (buffer != nullptr) {
-            buffer->unregister();
-        }
-    }
-    registeredGLBuffers.clear();
-    
     // No need to manually free CudaBuffer objects as they're handled by shared_ptr
     allocatedBuffers.clear();
     
     // Reset device to clear all memory
     CUDA_CHECK(cudaDeviceReset());
-}
-
-// Register an OpenGL buffer for CUDA interop
-std::shared_ptr<CudaGLBuffer> CudaMemoryManager::registerGLBuffer(GLuint buffer, unsigned int flags) {
-    auto glBuffer = std::make_shared<CudaGLBuffer>();
-    glBuffer->registerBuffer(buffer, flags);
-    registeredGLBuffers.push_back(glBuffer.get());
-    return glBuffer;
 }
 
 // Get device properties
