@@ -106,4 +106,7 @@ target_link_libraries(cuda_test PRIVATE
 target_link_libraries(drumforge_parallel PRIVATE 
     cuda
     cudart
+    OpenGL::GL
+    GLEW::GLEW
+    glfw
 )
