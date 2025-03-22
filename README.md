@@ -1,80 +1,115 @@
-# GPU-Accelerated DrumForge Prototype
+# DrumForge: GPU-Accelerated Drum Simulation
 
-This repository contains a prototype implementation for simulating drum membranes and resonance using GPU acceleration.
+A physically-based drum synthesizer that leverages CUDA for high-performance simulation of drum acoustics.
 
 ## Project Overview
 
-The goal is to create a physically accurate drum sound synthesis system that balances computational efficiency with sound quality by:
+DrumForge aims to create physically accurate drum sound synthesis by balancing computational efficiency with sound quality through:
 
-1. Using GPU-accelerated physics for the membrane vibration (high-fidelity simulation)
-2. Approximating the drum shell/body response (efficient resonator model)
+1. Highly parallel GPU-accelerated physics for accurate acoustic simulation
+2. Modular component architecture for complex drum modeling
+3. Real-time visualization and sound generation
 
-## Technical Approach
+## Architecture
 
-### Core Simulation Method
-- **Membrane Physics**: Finite Difference Time Domain (FDTD) method implemented on CUDA
-- **Body Resonance**: Modal synthesis approach with simplified coupling
-- **Sound Generation**: Direct conversion of membrane displacement to audio signal
+DrumForge employs a modular component-based architecture that allows for scalable simulation of complex drum systems:
 
-### Tech Stack
+```
+┌───────────────────────────────────────┐
+│             SimulationManager         │
+├───────────────────────────────────────┤
+│ - Coordinates component interactions  │
+│ - Manages simulation time stepping    │
+│ - Handles global parameters           │
+└─────────────┬─────────────────────────┘
+              │
+              ▼
+┌───────────────────────────────────────┐
+│        CudaMemoryManager              │
+├───────────────────────────────────────┤
+│ - Allocates/frees GPU memory          │
+│ - Manages OpenGL interoperability     │
+│ - Handles device synchronization      │
+└─────────────┬─────────────────────────┘
+              │
+              ▼
+┌─────────────┴─────────────────────────┐
+│         ComponentInterface            │
+├───────────────────────────────────────┤
+│ - Common interface for all components │
+│ - Defines init/update/render methods  │
+│ - Specifies coupling mechanisms       │
+└───┬───────────────┬───────────────┬───┘
+    │               │               │
+    ▼               ▼               ▼
+┌─────────┐    ┌─────────┐    ┌─────────┐
+│ Membrane │    │AirCavity│    │DrumShell│
+│Component │    │Component│    │Component│
+└─────────┘    └─────────┘    └─────────┘
+```
+
+### Core Components
+
+- **SimulationManager**: Coordinates the simulation of all components and handles their interactions
+- **CudaMemoryManager**: Provides unified memory management for all GPU buffers
+- **ComponentInterface**: A standard interface that all drum components implement
+- **Membrane Component**: Simulates the vibrating membranes using FDTD methods
+- **AirCavity Component**: Models the acoustic behavior of air inside the drum
+- **DrumShell Component**: Simulates the resonant properties of the drum shell
+
+### Technical Approach
+
+- **CUDA-OpenGL Interoperability**: Direct GPU-to-visualization pipeline without CPU transfers
+- **Finite Difference Time Domain (FDTD)**: For accurate wave propagation simulation
+- **Component Coupling**: Interfaces for exchanging forces and boundary conditions between components
+
+## Current Features
+
+- CUDA-accelerated membrane simulation
+- OpenGL visualization of membrane dynamics
+- User interaction via mouse and keyboard
+- Real-time parameter adjustment
+- Direct mallet strike simulation
+
+## Planned Features
+
+- Multiple coupled membranes (top and bottom)
+- Internal air cavity simulation
+- Acoustic radiation modeling
+- Import of 3D models from Blender
+- Advanced material properties
+- Programmable strike patterns
+- Audio export functionality
+
+## Tech Stack
+
 - **Core**: C++, CUDA, OpenGL
 - **Libraries**:
   - GLFW (window management)
   - Dear ImGui (user interface)
-  - RtAudio (real-time audio playback)
-  - libsndfile (audio file export and analysis)
   - GLM (math operations)
-- **Build System**: CMake with Git submodules for dependencies
-
-## Prototype Scope
-
-For the initial prototype, we're focusing on:
-
-- Procedurally generated circular membrane (no Blender import)
-- Basic visualization of membrane deformation
-- Simple user interface for parameter adjustment
-- Real-time audio output
-- Simple mallet strike simulation
-
-## Future Extensions
-
-After the prototype is functional:
-- 3D model import from Blender
-- More sophisticated material models
-- Advanced excitation methods
-- Improved coupling between membrane and body
-- Support for different drum types
-
-## Development Plan
-
-1. Set up project structure and build system
-2. Implement basic CUDA kernel for membrane simulation
-3. Add OpenGL visualization
-4. Create user interface with Dear ImGui
-5. Integrate audio output
-6. Refine and optimize the simulation
-7. Add parameter controls and presets
+  - RtAudio (planned for audio output)
+  - libsndfile (planned for audio export)
+- **Build System**: CMake with CUDA support
 
 ## Building and Running
 
 ### Prerequisites
-- CMake 3.15 or higher
-- CUDA Toolkit
+
+- CMake 3.31.6 or higher
+- CUDA Toolkit 12.8 or higher
 - OpenGL development libraries
 - GLFW3 development libraries
-- RtAudio development libraries
-- libsndfile development libraries
-- C++ compiler with C++17 support
+- GLEW development libraries
+- GLM development libraries
+- C++ compiler with C++23 support
 
 ### Build Instructions
+
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/drumforge.git
 cd drumforge
-
-# Initialize and update submodules
-git submodule init
-git submodule update
 
 # Create build directory
 mkdir build
@@ -84,19 +119,22 @@ cd build
 cmake ..
 cmake --build .
 
-# Run the tests
-./drumforge_test
+# Run the application
+./drumforge
+
+# Run the CUDA tests
+./cuda_test
 ```
 
-### Test Output
-The test program will verify that all required components are functioning correctly:
-- CUDA functionality (GPU device detection and basic computation)
-- OpenGL/GLFW window creation
-- ImGui interface rendering
-- RtAudio sound playback (you should hear a short 440Hz tone)
-- libsndfile file export (creates a test_sine.wav file)
+## Controls
 
-A successful test will display "✅ All tests completed successfully!" in the console.
+- **Mouse Left-Click**: Strike the drum membrane
+- **WASD, QE**: Move camera
+- **Arrow Keys**: Pan camera view
+- **1, 2, 3**: Toggle visibility of components
+- **R**: Reset membrane to flat state
+- **H**: Show help message
+- **ESC**: Exit application
 
 ## References
 
