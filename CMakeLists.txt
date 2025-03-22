@@ -52,6 +52,7 @@ set(SOURCES_CUDA_TEST
 # Parallel source files
 set(SOURCES_PARALLEL
     parallel/src/cuda_memory_manager.cu
+    parallel/src/main.cpp
 )
 
 # Parallel header files
