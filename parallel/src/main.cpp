@@ -1,18 +1,34 @@
 #include "cuda_memory_manager.h"
+#include "simulation_manager.h"
 #include <iostream>
 
 int main(int argc, char* argv[]) {
     std::cout << "DrumForge Parallel - Starting up..." << std::endl;
     
     try {
-        // Initialize the CUDA memory manager
-        drumforge::CudaMemoryManager& memoryManager = drumforge::CudaMemoryManager::getInstance();
-        memoryManager.initialize();
+        // Get the simulation manager
+        drumforge::SimulationManager& simManager = drumforge::SimulationManager::getInstance();
         
-        std::cout << "CUDA Memory Manager initialized successfully!" << std::endl;
+        // Initialize the simulation
+        simManager.initialize();
+        
+        std::cout << "SimulationManager initialized successfully!" << std::endl;
+        
+        // Modify some simulation parameters
+        drumforge::SimulationParameters params = simManager.getParameters();
+        params.timeScale = 2.0f;
+        simManager.updateParameters(params);
+        
+        std::cout << "Simulation parameters updated (timeScale = 2.0)" << std::endl;
+        
+        // Run a few steps of an empty simulation (will use default timestep)
+        for (int i = 0; i < 5; i++) {
+            simManager.advance(0.016f); // ~60 FPS
+            std::cout << "Simulation advanced, step " << (i + 1) << std::endl;
+        }
         
         // Clean up
-        memoryManager.shutdown();
+        simManager.shutdown();
         
         std::cout << "DrumForge Parallel - Shutdown complete" << std::endl;
     }
@@ -21,8 +37,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     catch (const std::exception& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
-    return 1;
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
     }
     catch (...) {
         std::cerr << "Unknown error occurred" << std::endl;
@@ -30,4 +46,4 @@ int main(int argc, char* argv[]) {
     }
 
     return 0;
-    }
+}

@@ -51,13 +51,16 @@ set(SOURCES_CUDA_TEST
 
 # Parallel source files
 set(SOURCES_PARALLEL
-    parallel/src/cuda_memory_manager.cu
     parallel/src/main.cpp
+    parallel/src/cuda_memory_manager.cu
+    parallel/src/simulation_manager.cpp
 )
 
 # Parallel header files
 set(HEADERS_PARALLEL
     parallel/include/cuda_memory_manager.h
+    parallel/include/component_interface.h
+    parallel/include/simulation_manager.h
 )
 
 # Legacy executable
