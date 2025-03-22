@@ -53,6 +53,16 @@ void CudaMemoryManager::initialize() {
     if (props.major < 3) {
         throw CudaException("This application requires a CUDA device with compute capability 3.0 or higher");
     }
+    
+    // Check if OpenGL interop is supported
+    bool glInteropSupported = isGLInteropSupported();
+    std::cout << "CUDA-OpenGL Interoperability: " 
+              << (glInteropSupported ? "Supported" : "Not Supported") << std::endl;
+              
+    if (!glInteropSupported) {
+        std::cout << "Warning: CUDA-OpenGL interoperability is not supported on this device. "
+                  << "Visualization features may not be available." << std::endl;
+    }
 }
 
 // Shut down and release all resources
@@ -73,6 +83,46 @@ cudaDeviceProp CudaMemoryManager::getDeviceProperties() {
     CUDA_CHECK(cudaGetDeviceProperties(&props, deviceId));
     
     return props;
+}
+
+// Check if CUDA-OpenGL interop is supported on this device
+bool CudaMemoryManager::isGLInteropSupported() {
+    return cuda_gl::isInteropSupported();
+}
+
+// Register an existing OpenGL buffer with CUDA
+std::shared_ptr<CudaGLBuffer> CudaMemoryManager::registerGLBuffer(
+    GLuint bufferId, size_t count, size_t elemSize, 
+    cudaGraphicsRegisterFlags flags) {
+    
+    try {
+        // Use the cuda_gl helper to register the buffer
+        auto buffer = cuda_gl::registerBuffer(bufferId, count, elemSize, flags);
+        std::cout << "Registered OpenGL buffer " << bufferId << " with CUDA" << std::endl;
+        return buffer;
+    }
+    catch (const CudaException& e) {
+        std::cerr << "Failed to register OpenGL buffer: " << e.what() << std::endl;
+        throw; // Re-throw to let caller handle it
+    }
+}
+
+// Create a new OpenGL buffer and register it with CUDA
+std::shared_ptr<CudaGLBuffer> CudaMemoryManager::createGLBuffer(
+    size_t count, size_t elemSize, GLenum target, GLenum usage) {
+    
+    try {
+        // Use the cuda_gl helper to create and register a new buffer
+        auto buffer = cuda_gl::createBuffer(count, elemSize, target, usage);
+        std::cout << "Created new OpenGL buffer and registered with CUDA" 
+                  << " (size: " << count << " elements, " 
+                  << (count * elemSize) << " bytes)" << std::endl;
+        return buffer;
+    }
+    catch (const CudaException& e) {
+        std::cerr << "Failed to create and register OpenGL buffer: " << e.what() << std::endl;
+        throw; // Re-throw to let caller handle it
+    }
 }
 
 } // namespace drumforge
