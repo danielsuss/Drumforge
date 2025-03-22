@@ -26,7 +26,7 @@ find_package(glfw3 REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(glm REQUIRED)
 
-# Define source files
+# Legacy source files
 set(SOURCES_LEGACY
     legacy/src/main.cpp
     legacy/src/membrane.cpp
@@ -35,7 +35,7 @@ set(SOURCES_LEGACY
     legacy/src/camera.cpp
 )
 
-# Define header files
+# Legacy header files
 set(HEADERS_LEGACY
     legacy/include/membrane.h
     legacy/include/shader.h
@@ -43,28 +43,48 @@ set(HEADERS_LEGACY
     legacy/include/camera.h
 )
 
-# CUDA source files
+# CUDA test source files
 set(SOURCES_CUDA_TEST
     cuda_test/src/cuda_test.cu
     cuda_test/src/test_cuda_main.cpp
 )
 
-# Main executable
+# Parallel source files
+set(SOURCES_PARALLEL
+    parallel/src/cuda_memory_manager.cu
+)
+
+# Parallel header files
+set(HEADERS_PARALLEL
+    parallel/include/cuda_memory_manager.h
+)
+
+# Legacy executable
 add_executable(drumforge_legacy ${SOURCES_LEGACY} ${HEADERS_LEGACY})
 
 # CUDA test executable
 add_executable(cuda_test ${SOURCES_CUDA_TEST})
 
-# Include directories
+# Parallel executable
+add_executable(drumforge_parallel ${SOURCES_PARALLEL} ${HEADERS_PARALLEL})
+
+# Legacy include directories
 target_include_directories(drumforge_legacy PRIVATE 
     ${CMAKE_SOURCE_DIR}/legacy/include
 )
 
+# CUDA test include directories
 target_include_directories(cuda_test PRIVATE
     /usr/local/cuda-12.8/include
 )
 
-# Link libraries
+# Parallel include directories
+target_include_directories(drumforge_parallel PRIVATE
+    ${CMAKE_SOURCE_DIR}/parallel/include
+    /usr/local/cuda-12.8/include
+)
+
+# Legacy link libraries
 target_link_libraries(drumforge_legacy PRIVATE 
     OpenGL::GL
     glfw
@@ -72,7 +92,14 @@ target_link_libraries(drumforge_legacy PRIVATE
     GLU
 )
 
+# CUDA test link libraries
 target_link_libraries(cuda_test PRIVATE 
+    cuda
+    cudart
+)
+
+# Parallel link libraries
+target_link_libraries(drumforge_parallel PRIVATE 
     cuda
     cudart
 )
