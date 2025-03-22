@@ -7,6 +7,7 @@
 #endif
 
 #include <cuda_runtime.h>
+#include "cuda_gl_buffer.h"
 
 #include <vector>
 #include <string>
@@ -121,9 +122,6 @@ public:
     size_t bytes() const { return byteSize; }
 };
 
-// Forward declarations for OpenGL interoperability functions
-// These will be implemented in a separate .cu file
-
 // Main memory manager class
 class CudaMemoryManager {
 private:
@@ -168,8 +166,19 @@ public:
     // Get device properties
     cudaDeviceProp getDeviceProperties();
     
+    // CUDA-OpenGL Interoperability methods
+    
     // Check if CUDA-OpenGL interop is supported on this device
     bool isGLInteropSupported();
+    
+    // Register an existing OpenGL buffer with CUDA
+    std::shared_ptr<CudaGLBuffer> registerGLBuffer(GLuint bufferId, size_t count, size_t elemSize,
+                                                  cudaGraphicsRegisterFlags flags = cudaGraphicsRegisterFlagsNone);
+    
+    // Create a new OpenGL buffer and register it with CUDA
+    std::shared_ptr<CudaGLBuffer> createGLBuffer(size_t count, size_t elemSize,
+                                                GLenum target = GL_ARRAY_BUFFER, 
+                                                GLenum usage = GL_DYNAMIC_DRAW);
 };
 
 } // namespace drumforge
