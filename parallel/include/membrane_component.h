@@ -19,7 +19,9 @@ struct MembraneKernelParams;
  * MembraneComponent simulates a circular drum membrane using CUDA-accelerated
  * finite difference time domain (FDTD) methods to solve the 2D wave equation.
  */
-class MembraneComponent : public ComponentInterface {
+class MembraneComponent : 
+    public ComponentInterface,
+    public std::enable_shared_from_this<MembraneComponent> {
 private:
     // Reference to memory manager and simulation manager
     CudaMemoryManager& memoryManager;
@@ -48,7 +50,7 @@ private:
     std::shared_ptr<CudaGLBuffer> glInteropBuffer;  // Obtained from CudaMemoryManager
 
     // Host-side data for CPU access (mostly for I/O)
-    std::vector<float> h_heights;
+    mutable std::vector<float> h_heights;
 
     // Component name
     std::string name;

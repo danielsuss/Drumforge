@@ -55,6 +55,8 @@ set(SOURCES_PARALLEL
     parallel/src/cuda_memory_manager.cu
     parallel/src/simulation_manager.cpp
     parallel/src/cuda_gl_buffer.cu
+    parallel/src/membrane_kernels.cu
+    parallel/src/membrane_component.cpp
 )
 
 # Parallel header files
