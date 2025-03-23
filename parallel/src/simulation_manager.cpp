@@ -35,6 +35,8 @@ void SimulationManager::initialize() {
     }
     
     std::cout << "Simulation initialized with " << components.size() << " components" << std::endl;
+    std::cout << "Grid dimensions: " << params.gridSizeX << "x" << params.gridSizeY << "x" 
+              << params.gridSizeZ << " (cell size: " << params.cellSize << ")" << std::endl;
 }
 
 // Shut down the simulation
@@ -135,6 +137,21 @@ float SimulationManager::calculateStableTimestep() const {
     }
     
     return minTimestep;
+}
+
+// Set grid specifications
+void SimulationManager::setGridSpecifications(int sizeX, int sizeY, int sizeZ, float cellSize) {
+    // Store the new grid parameters
+    params.gridSizeX = sizeX;
+    params.gridSizeY = sizeY;
+    params.gridSizeZ = sizeZ;
+    params.cellSize = cellSize;
+    
+    std::cout << "Grid specifications updated: " << sizeX << "x" << sizeY << "x" 
+              << sizeZ << " (cell size: " << cellSize << ")" << std::endl;
+              
+    // Note: This method should be called before components are initialized
+    // Changing grid size after initialization may require reinitializing components
 }
 
 } // namespace drumforge
