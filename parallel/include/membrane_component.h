@@ -31,9 +31,9 @@ private:
     float radius;        // Radius of the circular membrane
 
     // Grid parameters (set during initialization from SimulationManager)
-    int gridSizeX;       // Width of the component's grid
-    int gridSizeY;       // Height of the component's grid
-    float cellSize;      // Physical size of each grid cell
+    int membraneWidth;    // Width of the component's data array
+    int membraneHeight;   // Height of the component's data array
+    float cellSize;       // Physical size of each grid cell
 
     // Component positioning
     GridRegion region;   // The region allocated from the global grid
@@ -103,8 +103,8 @@ public:
     // Accessors
     const std::vector<float>& getHeights() const;
     float getHeight(int x, int y) const;
-    int getGridSizeX() const { return gridSizeX; }
-    int getGridSizeY() const { return gridSizeY; }
+    int getMembraneWidth() const { return membraneWidth; }
+    int getMembraneHeight() const { return membraneHeight; }
     float getRadius() const { return radius; }
     
     // Check if a point is inside the circular membrane
