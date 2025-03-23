@@ -2,6 +2,7 @@
 #include <iostream>
 #include <algorithm>
 #include <limits>
+#include <stdexcept>
 
 namespace drumforge {
 
@@ -46,6 +47,7 @@ void SimulationManager::shutdown() {
     // Clear all components
     components.clear();
     couplings.clear();
+    allocatedRegions.clear();
     
     // Reset singleton instance
     delete instance;
@@ -152,6 +154,192 @@ void SimulationManager::setGridSpecifications(int sizeX, int sizeY, int sizeZ, f
               
     // Note: This should be called before components are initialized
     // as components will use these specifications during initialization
+}
+
+//--------------------------------------------------------------------------
+// Grid coordination functions implementation
+//--------------------------------------------------------------------------
+
+GridRegion SimulationManager::allocateGridRegion(
+    std::shared_ptr<ComponentInterface> component,
+    int startX, int startY, int startZ,
+    int sizeX, int sizeY, int sizeZ) {
+    
+    // Validate input
+    if (startX < 0 || startY < 0 || startZ < 0 ||
+        startX + sizeX > params.gridSizeX ||
+        startY + sizeY > params.gridSizeY ||
+        startZ + sizeZ > params.gridSizeZ) {
+        std::cerr << "Error: Requested grid region is outside global grid bounds" << std::endl;
+        return GridRegion(); // Return empty region on error
+    }
+    
+    // Check for overlap with existing regions
+    for (const auto& region : allocatedRegions) {
+        // Simple check: if this new region's bounding box overlaps with an existing region
+        bool overlaps = !(
+            startX + sizeX <= region.startX ||
+            startY + sizeY <= region.startY ||
+            startZ + sizeZ <= region.startZ ||
+            startX >= region.startX + region.sizeX ||
+            startY >= region.startY + region.sizeY ||
+            startZ >= region.startZ + region.sizeZ
+        );
+        
+        if (overlaps) {
+            std::cerr << "Error: Requested grid region overlaps with an existing region" << std::endl;
+            return GridRegion(); // Return empty region on error
+        }
+    }
+    
+    // Create the new region
+    GridRegion newRegion;
+    newRegion.startX = startX;
+    newRegion.startY = startY;
+    newRegion.startZ = startZ;
+    newRegion.sizeX = sizeX;
+    newRegion.sizeY = sizeY;
+    newRegion.sizeZ = sizeZ;
+    newRegion.owner = component;
+    
+    // Add to allocated regions
+    allocatedRegions.push_back(newRegion);
+    
+    std::cout << "Allocated grid region " 
+              << "(" << startX << "," << startY << "," << startZ << ") "
+              << "size " << sizeX << "x" << sizeY << "x" << sizeZ
+              << " for component " << component->getName() << std::endl;
+    
+    return newRegion;
+}
+
+GridRegion SimulationManager::findAndAllocateGridRegion(
+    std::shared_ptr<ComponentInterface> component,
+    int sizeX, int sizeY, int sizeZ) {
+    
+    // Simple first-fit allocation strategy
+    // In a real implementation, you might want a more sophisticated algorithm
+    
+    // Start from the origin and try to find a free region
+    for (int z = 0; z <= params.gridSizeZ - sizeZ; z++) {
+        for (int y = 0; y <= params.gridSizeY - sizeY; y++) {
+            for (int x = 0; x <= params.gridSizeX - sizeX; x++) {
+                // Check if this region would overlap with any existing region
+                bool overlap = false;
+                
+                for (const auto& region : allocatedRegions) {
+                    bool regionOverlap = !(
+                        x + sizeX <= region.startX ||
+                        y + sizeY <= region.startY ||
+                        z + sizeZ <= region.startZ ||
+                        x >= region.startX + region.sizeX ||
+                        y >= region.startY + region.sizeY ||
+                        z >= region.startZ + region.sizeZ
+                    );
+                    
+                    if (regionOverlap) {
+                        overlap = true;
+                        break;
+                    }
+                }
+                
+                if (!overlap) {
+                    // We found a free region, allocate it
+                    return allocateGridRegion(component, x, y, z, sizeX, sizeY, sizeZ);
+                }
+            }
+        }
+    }
+    
+    // If we get here, no free region was found
+    std::cerr << "Error: Could not find a free grid region of size "
+              << sizeX << "x" << sizeY << "x" << sizeZ << std::endl;
+    return GridRegion(); // Return empty region
+}
+
+void SimulationManager::releaseGridRegion(const GridRegion& region) {
+    auto it = std::find_if(allocatedRegions.begin(), allocatedRegions.end(),
+        [&region](const GridRegion& r) {
+            return r.startX == region.startX &&
+                   r.startY == region.startY &&
+                   r.startZ == region.startZ &&
+                   r.sizeX == region.sizeX &&
+                   r.sizeY == region.sizeY &&
+                   r.sizeZ == region.sizeZ;
+        });
+    
+    if (it != allocatedRegions.end()) {
+        std::cout << "Released grid region "
+                  << "(" << region.startX << "," << region.startY << "," << region.startZ << ") "
+                  << "size " << region.sizeX << "x" << region.sizeY << "x" << region.sizeZ
+                  << std::endl;
+        
+        allocatedRegions.erase(it);
+    } else {
+        std::cerr << "Warning: Attempted to release non-existent grid region" << std::endl;
+    }
+}
+
+glm::vec3 SimulationManager::gridToWorld(int gridX, int gridY, int gridZ) const {
+    return glm::vec3(
+        gridX * params.cellSize,
+        gridY * params.cellSize,
+        gridZ * params.cellSize
+    );
+}
+
+void SimulationManager::worldToGrid(float worldX, float worldY, float worldZ,
+                                   int& gridX, int& gridY, int& gridZ) const {
+    gridX = static_cast<int>(worldX / params.cellSize);
+    gridY = static_cast<int>(worldY / params.cellSize);
+    gridZ = static_cast<int>(worldZ / params.cellSize);
+}
+
+bool SimulationManager::isPointAllocated(int x, int y, int z) const {
+    for (const auto& region : allocatedRegions) {
+        if (region.contains(x, y, z)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::shared_ptr<ComponentInterface> SimulationManager::findComponentAtPoint(int x, int y, int z) const {
+    for (const auto& region : allocatedRegions) {
+        if (region.contains(x, y, z)) {
+            return region.owner.lock(); // Convert weak_ptr to shared_ptr
+        }
+    }
+    return nullptr;
+}
+
+const GridRegion* SimulationManager::findRegionAtPoint(int x, int y, int z) const {
+    for (const auto& region : allocatedRegions) {
+        if (region.contains(x, y, z)) {
+            return &region;
+        }
+    }
+    return nullptr;
+}
+
+void SimulationManager::localToGlobal(const GridRegion& region,
+                                     int localX, int localY, int localZ,
+                                     int& globalX, int& globalY, int& globalZ) const {
+    globalX = region.startX + localX;
+    globalY = region.startY + localY;
+    globalZ = region.startZ + localZ;
+}
+
+bool SimulationManager::globalToLocal(const GridRegion& region,
+                                     int globalX, int globalY, int globalZ,
+                                     int& localX, int& localY, int& localZ) const {
+    if (region.contains(globalX, globalY, globalZ)) {
+        localX = globalX - region.startX;
+        localY = globalY - region.startY;
+        localZ = globalZ - region.startZ;
+        return true;
+    }
+    return false;
 }
 
 } // namespace drumforge

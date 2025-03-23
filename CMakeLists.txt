@@ -63,6 +63,7 @@ set(HEADERS_PARALLEL
     parallel/include/component_interface.h
     parallel/include/simulation_manager.h
     parallel/include/cuda_gl_buffer.h
+    parallel/include/membrane_component.h
 )
 
 # Legacy executable

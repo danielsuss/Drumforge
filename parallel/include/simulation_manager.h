@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <glm/glm.hpp>
 
 namespace drumforge {
 
@@ -34,11 +35,39 @@ struct SimulationParameters {
 };
 
 /**
+ * @brief Represents a region within the global grid
+ * 
+ * Used to track which parts of the global grid are allocated to specific components
+ */
+struct GridRegion {
+    // Position in the global grid (bottom-left-front corner)
+    int startX = 0;
+    int startY = 0;
+    int startZ = 0;
+    
+    // Size of the region
+    int sizeX = 0;
+    int sizeY = 0;
+    int sizeZ = 0;
+    
+    // Owner component (optional)
+    std::weak_ptr<ComponentInterface> owner;
+    
+    // Check if a global grid point is within this region
+    bool contains(int x, int y, int z) const {
+        return x >= startX && x < startX + sizeX &&
+               y >= startY && y < startY + sizeY &&
+               z >= startZ && z < startZ + sizeZ;
+    }
+};
+
+/**
  * @brief Manager for coordinating all simulation components
  * 
  * This class orchestrates the simulation of all components,
  * handles their interactions, manages the simulation loop,
  * and maintains shared parameters like grid specifications.
+ * It also coordinates the allocation of grid regions to components.
  */
 class SimulationManager {
 private:
@@ -54,6 +83,9 @@ private:
         std::shared_ptr<ComponentInterface> target;
     };
     std::vector<CouplingPair> couplings;
+    
+    // Grid region management
+    std::vector<GridRegion> allocatedRegions;
     
     // Simulation state
     float currentTime = 0.0f;
@@ -104,6 +136,51 @@ public:
     
     // Set grid specifications (should be called before components are initialized)
     void setGridSpecifications(int sizeX, int sizeY, int sizeZ, float cellSize);
+    
+    //--------------------------------------------------------------------------
+    // Grid coordination functions
+    //--------------------------------------------------------------------------
+    
+    // Allocate a region of the global grid for a component
+    GridRegion allocateGridRegion(std::shared_ptr<ComponentInterface> component,
+                                  int startX, int startY, int startZ,
+                                  int sizeX, int sizeY, int sizeZ);
+    
+    // Find a free region in the global grid
+    GridRegion findAndAllocateGridRegion(std::shared_ptr<ComponentInterface> component,
+                                         int sizeX, int sizeY, int sizeZ);
+    
+    // Release a previously allocated grid region
+    void releaseGridRegion(const GridRegion& region);
+    
+    // Get all allocated grid regions
+    const std::vector<GridRegion>& getAllocatedRegions() const { return allocatedRegions; }
+    
+    // Convert global grid coordinates to world coordinates
+    glm::vec3 gridToWorld(int gridX, int gridY, int gridZ) const;
+    
+    // Convert world coordinates to global grid coordinates
+    void worldToGrid(float worldX, float worldY, float worldZ,
+                    int& gridX, int& gridY, int& gridZ) const;
+    
+    // Check if a point in the global grid is within any allocated region
+    bool isPointAllocated(int x, int y, int z) const;
+    
+    // Find which component owns a particular grid point
+    std::shared_ptr<ComponentInterface> findComponentAtPoint(int x, int y, int z) const;
+    
+    // Find the grid region that contains a specific point
+    const GridRegion* findRegionAtPoint(int x, int y, int z) const;
+    
+    // Convert from local component coordinates to global grid coordinates
+    void localToGlobal(const GridRegion& region, 
+                      int localX, int localY, int localZ,
+                      int& globalX, int& globalY, int& globalZ) const;
+    
+    // Convert from global grid coordinates to local component coordinates
+    bool globalToLocal(const GridRegion& region,
+                      int globalX, int globalY, int globalZ,
+                      int& localX, int& localY, int& localZ) const;
 };
 
 } // namespace drumforge
