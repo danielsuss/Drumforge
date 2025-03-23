@@ -102,7 +102,7 @@ public:
     // Calculate a stable timestep based on all components
     float calculateStableTimestep() const;
     
-    // Update the grid specifications
+    // Set grid specifications (should be called before components are initialized)
     void setGridSpecifications(int sizeX, int sizeY, int sizeZ, float cellSize);
 };
 

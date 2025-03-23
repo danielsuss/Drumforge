@@ -7,6 +7,7 @@
 namespace drumforge {
 
 // Forward declarations
+class SimulationManager;
 class CudaMemoryManager;
 
 // Structure to hold coupling data for interaction between components
@@ -47,6 +48,14 @@ public:
     
     // Calculate a stable timestep for this component
     virtual float calculateStableTimestep() const = 0;
+    
+    // Get component's dimension requirements (2D, 3D)
+    enum class DimensionRequirement {
+        DIMENSION_2D,  // Component requires only X and Y dimensions (e.g., membrane)
+        DIMENSION_3D   // Component requires X, Y, and Z dimensions (e.g., air cavity)
+    };
+    
+    virtual DimensionRequirement getDimensionRequirement() const = 0;
 };
 
 } // namespace drumforge

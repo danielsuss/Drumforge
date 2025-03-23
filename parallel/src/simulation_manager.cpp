@@ -150,8 +150,8 @@ void SimulationManager::setGridSpecifications(int sizeX, int sizeY, int sizeZ, f
     std::cout << "Grid specifications updated: " << sizeX << "x" << sizeY << "x" 
               << sizeZ << " (cell size: " << cellSize << ")" << std::endl;
               
-    // Note: This method should be called before components are initialized
-    // Changing grid size after initialization may require reinitializing components
+    // Note: This should be called before components are initialized
+    // as components will use these specifications during initialization
 }
 
 } // namespace drumforge
