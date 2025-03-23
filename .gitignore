@@ -61,3 +61,5 @@ _deps/
 # Dependencies (can be added when needed)
 # vendor/
 # !vendor/your_required_file
+
+VisualizationPlan.md

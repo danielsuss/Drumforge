@@ -26,6 +26,14 @@ find_package(glfw3 REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(glm REQUIRED)
 
+# Legacy header files
+set(HEADERS_LEGACY
+    legacy/include/membrane.h
+    legacy/include/shader.h
+    legacy/include/airspace.h
+    legacy/include/camera.h
+)
+
 # Legacy source files
 set(SOURCES_LEGACY
     legacy/src/main.cpp
@@ -35,28 +43,10 @@ set(SOURCES_LEGACY
     legacy/src/camera.cpp
 )
 
-# Legacy header files
-set(HEADERS_LEGACY
-    legacy/include/membrane.h
-    legacy/include/shader.h
-    legacy/include/airspace.h
-    legacy/include/camera.h
-)
-
 # CUDA test source files
 set(SOURCES_CUDA_TEST
     cuda_test/src/cuda_test.cu
     cuda_test/src/test_cuda_main.cpp
-)
-
-# Parallel source files
-set(SOURCES_PARALLEL
-    parallel/src/main.cpp
-    parallel/src/cuda_memory_manager.cu
-    parallel/src/simulation_manager.cpp
-    parallel/src/cuda_gl_buffer.cu
-    parallel/src/membrane_kernels.cu
-    parallel/src/membrane_component.cpp
 )
 
 # Parallel header files
@@ -67,6 +57,18 @@ set(HEADERS_PARALLEL
     parallel/include/cuda_gl_buffer.h
     parallel/include/membrane_component.h
     parallel/include/membrane_kernels.cuh
+    parallel/include/camera.h
+    parallel/include/input_handler.h
+)
+
+# Parallel source files
+set(SOURCES_PARALLEL
+    parallel/src/main.cpp
+    parallel/src/cuda_memory_manager.cu
+    parallel/src/simulation_manager.cpp
+    parallel/src/cuda_gl_buffer.cu
+    parallel/src/membrane_kernels.cu
+    parallel/src/membrane_component.cpp
 )
 
 # Legacy executable
