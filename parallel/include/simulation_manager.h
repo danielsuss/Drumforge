@@ -156,6 +156,9 @@ public:
     // Get all allocated grid regions
     const std::vector<GridRegion>& getAllocatedRegions() const { return allocatedRegions; }
     
+    // Get all components in the simulation
+    const std::vector<std::shared_ptr<ComponentInterface>>& getComponents() const { return components; }
+    
     // Convert global grid coordinates to world coordinates
     glm::vec3 gridToWorld(int gridX, int gridY, int gridZ) const;
     

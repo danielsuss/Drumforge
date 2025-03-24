@@ -148,22 +148,47 @@ void MembraneComponent::update(float timestep) {
 }
 
 void MembraneComponent::prepareForVisualization() {
-    // If we have an OpenGL interop buffer, update the visualization vertices
-    if (glInteropBuffer && glInteropBuffer->isRegistered()) {
-        try {
-            // Map the GL buffer for CUDA access
-            float3* deviceVertices = static_cast<float3*>(glInteropBuffer->map());
+    // For now, just create a simple static mesh for visualization
+    // without using CUDA-OpenGL interop
+    
+    // Get the current heights - this will copy from CUDA to host
+    const auto& heights = getHeights();
+    
+    // Create a CPU-side buffer for vertex data
+    std::vector<float> vertices(membraneWidth * membraneHeight * 3);
+    
+    // Set up vertices for visualization
+    const float visualizationScale = 1.0f; // Scale for better visibility
+    for (int y = 0; y < membraneHeight; y++) {
+        for (int x = 0; x < membraneWidth; x++) {
+            int index = (y * membraneWidth + x) * 3;
+            int dataIndex = y * membraneWidth + x;
             
-            // Update the visualization vertices
-            const float visualizationScale = 5.0f;  // Scale factor for better visibility
-            updateVisualizationVertices(deviceVertices, d_heights->get(),
-                                      d_circleMask->get(), *kernelParams, visualizationScale);
+            // Calculate position in world space
+            float xPos = (x - membraneWidth / 2.0f) * cellSize;
+            float yPos = (y - membraneHeight / 2.0f) * cellSize;
+            float zPos = 0.0f; // Initially flat
             
-            // Unmap the buffer to make it available for OpenGL rendering
-            glInteropBuffer->unmap();
-        } catch (const CudaException& e) {
-            std::cerr << "Error updating visualization: " << e.what() << std::endl;
+            // Apply height if inside the circular membrane
+            if (isInsideCircle(x, y)) {
+                zPos = heights[dataIndex] * visualizationScale;
+            }
+            
+            vertices[index] = xPos;
+            vertices[index + 1] = yPos;
+            vertices[index + 2] = zPos;
         }
+    }
+    
+    // Update the OpenGL buffer with the new vertex data
+    if (vaoId > 0) { // Only if VAO exists
+        GLuint vbo;
+        glBindVertexArray(vaoId);
+        glGetVertexAttribIuiv(0, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(float), vertices.data());
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
     }
 }
 
@@ -190,53 +215,76 @@ float MembraneComponent::calculateStableTimestep() const {
 //-----------------------------------------------------------------------------
 
 void MembraneComponent::initializeVisualization(VisualizationManager& visManager) {
-    if (glInteropBuffer != nullptr) {
-        // Already initialized
+    // Check if already initialized
+    if (vaoId != 0) {
         return;
     }
     
     std::cout << "Initializing visualization for MembraneComponent '" << name << "'..." << std::endl;
     
     try {
-        // Create an OpenGL Vertex Buffer Object (VBO) through the VisualizationManager
-        unsigned int vbo = visManager.createVertexBuffer(membraneWidth * membraneHeight * sizeof(float3));
+        // Initialize vertices for a simple grid
+        std::vector<float> vertices(membraneWidth * membraneHeight * 3);
+        for (int y = 0; y < membraneHeight; y++) {
+            for (int x = 0; x < membraneWidth; x++) {
+                int index = (y * membraneWidth + x) * 3;
+                
+                // Calculate position in world space
+                float xPos = (x - membraneWidth / 2.0f) * cellSize;
+                float yPos = (y - membraneHeight / 2.0f) * cellSize;
+                float zPos = 0.0f; // Initially flat
+                
+                vertices[index] = xPos;
+                vertices[index + 1] = yPos;
+                vertices[index + 2] = zPos;
+            }
+        }
         
-        // Register the buffer with CUDA
-        glInteropBuffer = memoryManager.registerGLBuffer(vbo, membraneWidth * membraneHeight, sizeof(float3));
+        // Create a vertex buffer with initial data
+        unsigned int vbo = visManager.createVertexBuffer(
+            vertices.size() * sizeof(float), 
+            vertices.data()
+        );
         
-        // Create Vertex Array Object (VAO) through the VisualizationManager
+        // Create Vertex Array Object
         vaoId = visManager.createVertexArray();
         
         // Configure vertex attributes
-        visManager.configureVertexAttributes(vaoId, vbo, 0, 3, sizeof(float3), 0);
+        visManager.configureVertexAttributes(vaoId, vbo, 0, 3, 3 * sizeof(float), 0);
         
-        // Generate indices for wireframe rendering
+        // Generate indices for wireframe rendering - ONLY within membrane radius
         std::vector<unsigned int> indices;
         
-        // Generate row lines
+        // Generate row lines only for points within the membrane radius
         for (int y = 0; y < membraneHeight; y++) {
             for (int x = 0; x < membraneWidth - 1; x++) {
-                indices.push_back(y * membraneWidth + x);
-                indices.push_back(y * membraneWidth + x + 1);
+                // Only add lines if both points are inside the circle
+                if (isInsideCircle(x, y) && isInsideCircle(x + 1, y)) {
+                    indices.push_back(y * membraneWidth + x);
+                    indices.push_back(y * membraneWidth + x + 1);
+                }
             }
         }
         
-        // Generate column lines
+        // Generate column lines only for points within the membrane radius
         for (int x = 0; x < membraneWidth; x++) {
             for (int y = 0; y < membraneHeight - 1; y++) {
-                indices.push_back(y * membraneWidth + x);
-                indices.push_back((y + 1) * membraneWidth + x);
+                // Only add lines if both points are inside the circle
+                if (isInsideCircle(x, y) && isInsideCircle(x, y + 1)) {
+                    indices.push_back(y * membraneWidth + x);
+                    indices.push_back((y + 1) * membraneWidth + x);
+                }
             }
         }
         
-        // Create Element Buffer Object (EBO) through the VisualizationManager
+        // Create Element Buffer Object
         eboId = visManager.createIndexBuffer(indices.data(), indices.size() * sizeof(unsigned int));
         
         std::cout << "Visualization for MembraneComponent '" << name << "' initialized successfully" << std::endl;
     }
     catch (const std::exception& e) {
         std::cerr << "Error initializing visualization: " << e.what() << std::endl;
-        throw;
+        // Don't rethrow - we want to continue even if visualization fails
     }
 }
 
@@ -255,10 +303,19 @@ void MembraneComponent::visualize(VisualizationManager& visManager) {
 }
 
 int MembraneComponent::getIndexCount() const {
-    // Calculate total number of indices for the wireframe
-    int numRowLines = membraneHeight * (membraneWidth - 1) * 2;
-    int numColLines = membraneWidth * (membraneHeight - 1) * 2;
-    return numRowLines + numColLines;
+    // If we have no EBO yet, return 0
+    if (eboId == 0) {
+        return 0;
+    }
+    
+    // Get the actual count from OpenGL
+    GLint count;
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboId);
+    glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &count);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    
+    // Convert byte count to index count (using unsigned int indices)
+    return count / sizeof(unsigned int);
 }
 
 //-----------------------------------------------------------------------------

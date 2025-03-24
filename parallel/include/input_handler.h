@@ -1,6 +1,7 @@
 #ifndef DRUMFORGE_INPUT_HANDLER_H
 #define DRUMFORGE_INPUT_HANDLER_H
 
+#include <GL/glew.h>  // GLEW must be included before any other OpenGL headers
 #include <GLFW/glfw3.h>
 #include <memory>
 #include <glm/glm.hpp>
@@ -9,6 +10,9 @@ namespace drumforge {
 
 // Forward declarations
 class Camera;
+
+// Forward declaration for membrane component
+class MembraneComponent;
 
 /**
  * @brief Class for handling user input
@@ -23,7 +27,15 @@ private:
     bool firstMouse;                     // Flag for mouse input initialization
     glm::vec2 lastMousePos;              // Last mouse position
     float cameraMoveSpeed;               // Camera movement speed multiplier
-
+    int windowWidth;                     // Current window width
+    int windowHeight;                    // Current window height
+    
+    // Stored membrane reference for click interactions
+    std::weak_ptr<MembraneComponent> membraneComponent;
+    
+    // Mouse state
+    bool mouseLeftPressed;               // Left mouse button state
+    
     // Internal input state
     struct {
         bool forward;    // W key
@@ -89,6 +101,40 @@ public:
      * The user pointer of the window should be set to the InputHandler instance.
      */
     static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+    
+    /**
+     * @brief Mouse button callback function for GLFW
+     */
+    static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+    
+    /**
+     * @brief Window resize callback function for GLFW
+     */
+    static void windowSizeCallback(GLFWwindow* window, int width, int height);
+    
+    /**
+     * @brief Connect a membrane component for click interactions
+     * 
+     * @param membrane Shared pointer to the membrane component
+     */
+    void connectMembrane(std::shared_ptr<MembraneComponent> membrane);
+    
+    /**
+     * @brief Process mouse click on membrane
+     * 
+     * @param mouseX X position of mouse in screen coordinates
+     * @param mouseY Y position of mouse in screen coordinates
+     */
+    void processMembraneClick(double mouseX, double mouseY);
+    
+    /**
+     * @brief Calculate ray from screen coordinates
+     * 
+     * @param screenX X position in screen coordinates
+     * @param screenY Y position in screen coordinates
+     * @return Ray origin and direction
+     */
+    std::pair<glm::vec3, glm::vec3> screenToRay(double screenX, double screenY) const;
 };
 
 } // namespace drumforge

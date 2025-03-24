@@ -102,6 +102,40 @@ void Camera::moveUp(float distance) {
     target += movement;
 }
 
+void Camera::panTargetRight(float distance) {
+    // Pan the target point left/right relative to the camera
+    glm::vec3 movement = right * distance;
+    
+    // Only move the target, not the camera position
+    target += movement;
+    
+    // Calculate the distance from camera to target
+    float targetDistance = glm::length(target - position);
+    
+    // Update camera vectors
+    updateCameraVectors();
+    
+    // Ensure the camera maintains the same distance from the target
+    position = target - getForwardDirection() * targetDistance;
+}
+
+void Camera::panTargetUp(float distance) {
+    // Pan the target point up/down relative to the camera
+    glm::vec3 movement = up * distance;
+    
+    // Only move the target, not the camera position
+    target += movement;
+    
+    // Calculate the distance from camera to target
+    float targetDistance = glm::length(target - position);
+    
+    // Update camera vectors
+    updateCameraVectors();
+    
+    // Ensure the camera maintains the same distance from the target
+    position = target - getForwardDirection() * targetDistance;
+}
+
 void Camera::reset(const glm::vec3& newPosition, const glm::vec3& newTarget) {
     position = newPosition;
     target = newTarget;

@@ -59,6 +59,7 @@ set(HEADERS_PARALLEL
     parallel/include/membrane_kernels.cuh
     parallel/include/camera.h
     parallel/include/input_handler.h
+    parallel/include/visualization_manager.h
 )
 
 # Parallel source files
@@ -71,6 +72,7 @@ set(SOURCES_PARALLEL
     parallel/src/membrane_component.cpp
     parallel/src/camera.cpp
     parallel/src/input_handler.cpp
+    parallel/src/visualization_manager.cpp
 )
 
 # Legacy executable

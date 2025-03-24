@@ -119,7 +119,19 @@ public:
      */
     void moveUp(float distance);
     
-
+    /**
+     * @brief Pan the camera target left/right
+     * 
+     * @param distance Distance to pan target (positive = right, negative = left)
+     */
+    void panTargetRight(float distance);
+    
+    /**
+     * @brief Pan the camera target up/down
+     * 
+     * @param distance Distance to pan target (positive = up, negative = down)
+     */
+    void panTargetUp(float distance);
     
     /**
      * @brief Reset camera to default position
