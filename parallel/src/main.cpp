@@ -76,7 +76,7 @@ int main(int argc, char* argv[]) {
         
         // Modify simulation parameters - use smaller grid for testing
         drumforge::SimulationParameters params = simManager.getParameters();
-        params.timeScale = 1.0f;
+        params.timeScale = 2.0f;
         params.gridSizeX = 128;
         params.gridSizeY = 128;
         params.gridSizeZ = 16;
@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Creating membrane component..." << std::endl;
         auto membrane = std::make_shared<drumforge::MembraneComponent>(
             "Drumhead", 
-            3.0f,    // Radius
+            5.0f,    // Radius
             100.0f,   // Tension
             0.01f    // Damping
         );
@@ -108,7 +108,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Starting visualization test loop..." << std::endl;
         
         // Fixed timestep for simulation
-        const float timestep = 1.0f / 60.0f;  // ~60 FPS
+        const float timestep = 1.0f / 1.0f;  // ~60 FPS
         
         // Connect the membrane to the input handler for click interaction
         auto inputHandler = visManager.getInputHandler();
