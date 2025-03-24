@@ -36,7 +36,7 @@ CudaMemoryManager& CudaMemoryManager::getInstance() {
 }
 
 // Initialize CUDA and check device capabilities
-void CudaMemoryManager::initialize() {
+void CudaMemoryManager::initialize(bool enableInterop) {
     std::cout << "Initializing CUDA..." << std::endl;
     
     // Check if CUDA devices are available
@@ -97,14 +97,19 @@ void CudaMemoryManager::initialize() {
         std::cout << "Warning: Device does not support mapping host memory. This may affect performance." << std::endl;
     }
     
-    // Check if OpenGL interop is supported on this device
-    bool glInteropSupported = isGLInteropSupported();
-    std::cout << "CUDA-OpenGL Interoperability: " 
-              << (glInteropSupported ? "Supported" : "Not Supported") << std::endl;
-    
-    if (!glInteropSupported) {
-        throw CudaException("CUDA-OpenGL interoperability is not supported on this device. "
-                            "The application requires interop capabilities to run.");
+    // Only perform interop-specific checks if enabled
+    if (enableInterop) {
+        // Check if OpenGL interop is supported on this device
+        bool glInteropSupported = isGLInteropSupported();
+        std::cout << "CUDA-OpenGL Interoperability: " 
+                << (glInteropSupported ? "Supported" : "Not Supported") << std::endl;
+        
+        if (!glInteropSupported) {
+            std::cout << "CUDA-OpenGL interoperability is not supported. "
+                    << "Will use CPU-based visualization." << std::endl;
+        }
+    } else {
+        std::cout << "CUDA-OpenGL interoperability disabled by configuration." << std::endl;
     }
     
     // Initialize CUDA runtime by performing a small allocation

@@ -8,6 +8,10 @@
 #include <chrono>
 #include <thread>
 #include <stdexcept>
+#include <string>
+
+// Global flag to control CUDA-OpenGL interop attempts
+bool g_enableCudaGLInterop = false;  // Set to false to disable interop completely
 
 // Debug function to check for CUDA errors
 void checkCudaErrorsDebug(const char* filename, int line) {
@@ -23,6 +27,14 @@ void checkCudaErrorsDebug(const char* filename, int line) {
 
 int main(int argc, char* argv[]) {
     std::cout << "DrumForge Parallel - Starting up..." << std::endl;
+    
+    // Parse command line arguments
+    if (argc > 1 && std::string(argv[1]) == "--enable-interop") {
+        g_enableCudaGLInterop = true;
+        std::cout << "CUDA-OpenGL interoperability enabled via command line flag" << std::endl;
+    } else {
+        std::cout << "CUDA-OpenGL interoperability disabled (use --enable-interop to enable)" << std::endl;
+    }
     
     try {
         // IMPORTANT: Initialize VISUALIZATION MANAGER FIRST!
@@ -43,12 +55,14 @@ int main(int argc, char* argv[]) {
         cudaManager.initialize();
         CHECK_CUDA_ERRORS();
         
-        // Check if interop is supported
-        bool interopSupported = cudaManager.isGLInteropSupported();
-        if (!interopSupported) {
-            std::cerr << "ERROR: CUDA-OpenGL interop is not supported on this system. "
-                     << "The application requires interop capabilities to run." << std::endl;
-            return 1;
+        // Check if interop is supported only if we want to use it
+        if (g_enableCudaGLInterop) {
+            bool interopSupported = cudaManager.isGLInteropSupported();
+            if (!interopSupported) {
+                std::cerr << "WARNING: CUDA-OpenGL interop is not supported on this system. "
+                        << "Falling back to CPU-based visualization." << std::endl;
+                g_enableCudaGLInterop = false;  // Disable interop for the rest of the program
+            }
         }
         
         // Get the simulation manager

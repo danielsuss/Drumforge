@@ -145,7 +145,7 @@ public:
     static CudaMemoryManager& getInstance();
     
     // Initialize CUDA and check device capabilities
-    void initialize();
+    void initialize(bool enableInterop = true);
     
     // Shut down and release all resources
     void shutdown();

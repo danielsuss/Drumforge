@@ -8,6 +8,9 @@
 // Forward declaration for VisualizationManager
 #include "visualization_manager.h"
 
+// Reference to global flag controlling CUDA-OpenGL interop
+extern bool g_enableCudaGLInterop;
+
 namespace drumforge {
 
 //-----------------------------------------------------------------------------
@@ -115,22 +118,27 @@ void MembraneComponent::initialize() {
     resetMembrane(d_heights->get(), d_prevHeights->get(), d_velocities->get(), 
                  d_circleMask->get(), *kernelParams);
     
-    // Set up OpenGL interop for visualization
-    try {
-    // Check if CUDA-OpenGL interop is supported
-        if (memoryManager.isGLInteropSupported()) {
-            std::cout << "CUDA-OpenGL interoperability supported, setting up interop visualization" << std::endl;
-            
-            // We need to have the VAO/VBO created first before setting up interop
-            // This might be done in the initializeVisualization method if not already created
-            
-            // For now, we'll defer the interop setup to the initializeVisualization method
-        } else {
-            std::cout << "CUDA-OpenGL interoperability not supported, visualization will use CPU-to-GPU transfers" << std::endl;
+    // Set up OpenGL interop for visualization only if enabled
+    if (g_enableCudaGLInterop) {
+        try {
+            // Check if CUDA-OpenGL interop is supported
+            if (memoryManager.isGLInteropSupported()) {
+                std::cout << "CUDA-OpenGL interoperability supported, setting up interop visualization" << std::endl;
+                
+                // We need to have the VAO/VBO created first before setting up interop
+                // This might be done in the initializeVisualization method if not already created
+                
+                // For now, we'll defer the interop setup to the initializeVisualization method
+            } else {
+                std::cout << "CUDA-OpenGL interoperability not supported, visualization will use CPU-to-GPU transfers" << std::endl;
+            }
+        } catch (const CudaException& e) {
+            std::cerr << "Warning: Failed to set up visualization interop: " << e.what() << std::endl;
+            std::cerr << "Visualization will continue without GPU acceleration" << std::endl;
         }
-    } catch (const CudaException& e) {
-        std::cerr << "Warning: Failed to set up visualization interop: " << e.what() << std::endl;
-        std::cerr << "Visualization will continue without GPU acceleration" << std::endl;
+    } else {
+        std::cout << "CUDA-OpenGL interoperability disabled by configuration" << std::endl;
+        std::cout << "Visualization will use CPU-to-GPU transfers" << std::endl;
     }
     
     std::cout << "MembraneComponent '" << name << "' initialized successfully" << std::endl;
@@ -154,7 +162,7 @@ void MembraneComponent::update(float timestep) {
 
 void MembraneComponent::prepareForVisualization() {
     // Check if we can use CUDA-OpenGL interop (glInteropBuffer will be non-null if interop is set up)
-    if (glInteropBuffer) {
+    if (g_enableCudaGLInterop && glInteropBuffer && glInteropBuffer->isRegistered()) {
         try {
             // Using CUDA-OpenGL interop for direct GPU-to-GPU update
 
@@ -204,7 +212,7 @@ void MembraneComponent::prepareForVisualization() {
     
     // CPU-based fallback path or if interop is not available
     // Only use this if CUDA-OpenGL interop failed or is not available
-    if (!glInteropBuffer || !glInteropBuffer->isRegistered()) {
+    if (!g_enableCudaGLInterop || !glInteropBuffer || !glInteropBuffer->isRegistered()) {
         // Get the current heights from CUDA to CPU
         const auto& heights = getHeights();
         
@@ -244,7 +252,7 @@ void MembraneComponent::prepareForVisualization() {
             glBindBuffer(GL_ARRAY_BUFFER, 0);
             glBindVertexArray(0);
             
-            std::cout << "Membrane visualization prepared using CPU-based update" << std::endl;
+            // std::cout << "Membrane visualization prepared using CPU-based update" << std::endl;
         }
     }
 }
@@ -339,7 +347,7 @@ void MembraneComponent::initializeVisualization(VisualizationManager& visManager
         
         // CUDA-OpenGL Interop setup - Register the OpenGL vertex buffer with CUDA
         // This is the key part for interop functionality
-        if (memoryManager.isGLInteropSupported()) {
+        if (g_enableCudaGLInterop && memoryManager.isGLInteropSupported()) {
             try {
                 // Register the VBO for CUDA access
                 // First, we need the OpenGL buffer ID that was created by the VisualizationManager
@@ -363,6 +371,9 @@ void MembraneComponent::initializeVisualization(VisualizationManager& visManager
                 std::cerr << "Falling back to CPU-based visualization" << std::endl;
                 glInteropBuffer = nullptr;  // Ensure we'll use the CPU path
             }
+        } else {
+            std::cout << "CUDA-OpenGL interop disabled, using CPU-based visualization" << std::endl;
+            glInteropBuffer = nullptr;
         }
         
         std::cout << "Visualization for MembraneComponent '" << name << "' initialized successfully" << std::endl;
