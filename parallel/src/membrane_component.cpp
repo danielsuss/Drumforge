@@ -117,15 +117,20 @@ void MembraneComponent::initialize() {
     
     // Set up OpenGL interop for visualization
     try {
-        // Check if CUDA-OpenGL interop is supported
+    // Check if CUDA-OpenGL interop is supported
         if (memoryManager.isGLInteropSupported()) {
-            std::cout << "CUDA-OpenGL interoperability supported, visualization will be available" << std::endl;
+            std::cout << "CUDA-OpenGL interoperability supported, setting up interop visualization" << std::endl;
+            
+            // We need to have the VAO/VBO created first before setting up interop
+            // This might be done in the initializeVisualization method if not already created
+            
+            // For now, we'll defer the interop setup to the initializeVisualization method
         } else {
-            std::cout << "CUDA-OpenGL interoperability not supported, visualization will be limited" << std::endl;
+            std::cout << "CUDA-OpenGL interoperability not supported, visualization will use CPU-to-GPU transfers" << std::endl;
         }
     } catch (const CudaException& e) {
-        std::cerr << "Warning: Failed to set up visualization: " << e.what() << std::endl;
-        std::cerr << "Simulation will continue without visualization" << std::endl;
+        std::cerr << "Warning: Failed to set up visualization interop: " << e.what() << std::endl;
+        std::cerr << "Visualization will continue without GPU acceleration" << std::endl;
     }
     
     std::cout << "MembraneComponent '" << name << "' initialized successfully" << std::endl;
@@ -148,47 +153,99 @@ void MembraneComponent::update(float timestep) {
 }
 
 void MembraneComponent::prepareForVisualization() {
-    // For now, just create a simple static mesh for visualization
-    // without using CUDA-OpenGL interop
-    
-    // Get the current heights - this will copy from CUDA to host
-    const auto& heights = getHeights();
-    
-    // Create a CPU-side buffer for vertex data
-    std::vector<float> vertices(membraneWidth * membraneHeight * 3);
-    
-    // Set up vertices for visualization
-    const float visualizationScale = 1.0f; // Scale for better visibility
-    for (int y = 0; y < membraneHeight; y++) {
-        for (int x = 0; x < membraneWidth; x++) {
-            int index = (y * membraneWidth + x) * 3;
-            int dataIndex = y * membraneWidth + x;
+    // Check if we can use CUDA-OpenGL interop (glInteropBuffer will be non-null if interop is set up)
+    if (glInteropBuffer) {
+        try {
+            // Using CUDA-OpenGL interop for direct GPU-to-GPU update
+
+            // Map the buffer for CUDA access
+            void* devicePtr = glInteropBuffer->map();
             
-            // Calculate position in world space
-            float xPos = (x - membraneWidth / 2.0f) * cellSize;
-            float yPos = (y - membraneHeight / 2.0f) * cellSize;
-            float zPos = 0.0f; // Initially flat
+            // Convert to float3 pointer for vertex data
+            float3* vertices = static_cast<float3*>(devicePtr);
             
-            // Apply height if inside the circular membrane
-            if (isInsideCircle(x, y)) {
-                zPos = heights[dataIndex] * visualizationScale;
+            // CUDA kernel scale factor for visualization
+            const float visualizationScale = 1.0f;
+            
+            // Call the CUDA kernel to update vertices directly on the GPU
+            // This avoids the CPU-to-GPU transfer bottleneck
+            updateVisualizationVertices(
+                vertices,                  // OpenGL VBO mapped for CUDA access
+                d_heights->get(),          // Current height field
+                d_circleMask->get(),       // Circular membrane mask
+                *kernelParams,             // Kernel parameters 
+                visualizationScale         // Scale factor for visualization
+            );
+            
+            // Unmap the buffer when done (makes it available for OpenGL again)
+            glInteropBuffer->unmap();
+            
+            // No need to update the VAO or VBO - the data is already there
+            std::cout << "Membrane visualization prepared using CUDA-OpenGL interop" << std::endl;
+        }
+        catch (const CudaException& e) {
+            // Log error but continue - fallback to CPU-based update below
+            std::cerr << "Error in CUDA-OpenGL interop: " << e.what() << std::endl;
+            std::cerr << "Falling back to CPU-based visualization update" << std::endl;
+            
+            // Make sure the buffer is unmapped in case of partial failure
+            if (glInteropBuffer->isMappedForCUDA()) {
+                try {
+                    glInteropBuffer->unmap();
+                } 
+                catch (...) {
+                    // Ignore errors during cleanup
+                }
             }
             
-            vertices[index] = xPos;
-            vertices[index + 1] = yPos;
-            vertices[index + 2] = zPos;
+            // Continue to CPU fallback path
         }
     }
     
-    // Update the OpenGL buffer with the new vertex data
-    if (vaoId > 0) { // Only if VAO exists
-        GLuint vbo;
-        glBindVertexArray(vaoId);
-        glGetVertexAttribIuiv(0, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &vbo);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(float), vertices.data());
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+    // CPU-based fallback path or if interop is not available
+    // Only use this if CUDA-OpenGL interop failed or is not available
+    if (!glInteropBuffer || !glInteropBuffer->isRegistered()) {
+        // Get the current heights from CUDA to CPU
+        const auto& heights = getHeights();
+        
+        // Create a CPU-side buffer for vertex data
+        std::vector<float> vertices(membraneWidth * membraneHeight * 3);
+        
+        // Set up vertices for visualization
+        const float visualizationScale = 1.0f; // Scale for better visibility
+        for (int y = 0; y < membraneHeight; y++) {
+            for (int x = 0; x < membraneWidth; x++) {
+                int index = (y * membraneWidth + x) * 3;
+                int dataIndex = y * membraneWidth + x;
+                
+                // Calculate position in world space
+                float xPos = (x - membraneWidth / 2.0f) * cellSize;
+                float yPos = (y - membraneHeight / 2.0f) * cellSize;
+                float zPos = 0.0f; // Initially flat
+                
+                // Apply height if inside the circular membrane
+                if (isInsideCircle(x, y)) {
+                    zPos = heights[dataIndex] * visualizationScale;
+                }
+                
+                vertices[index] = xPos;
+                vertices[index + 1] = yPos;
+                vertices[index + 2] = zPos;
+            }
+        }
+        
+        // Update the OpenGL buffer with the new vertex data
+        if (vaoId > 0) { // Only if VAO exists
+            GLuint vbo;
+            glBindVertexArray(vaoId);
+            glGetVertexAttribIuiv(0, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &vbo);
+            glBindBuffer(GL_ARRAY_BUFFER, vbo);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(float), vertices.data());
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glBindVertexArray(0);
+            
+            std::cout << "Membrane visualization prepared using CPU-based update" << std::endl;
+        }
     }
 }
 
@@ -279,6 +336,34 @@ void MembraneComponent::initializeVisualization(VisualizationManager& visManager
         
         // Create Element Buffer Object
         eboId = visManager.createIndexBuffer(indices.data(), indices.size() * sizeof(unsigned int));
+        
+        // CUDA-OpenGL Interop setup - Register the OpenGL vertex buffer with CUDA
+        // This is the key part for interop functionality
+        if (memoryManager.isGLInteropSupported()) {
+            try {
+                // Register the VBO for CUDA access
+                // First, we need the OpenGL buffer ID that was created by the VisualizationManager
+                GLuint glBufferId;
+                glBindVertexArray(vaoId);
+                glGetVertexAttribIuiv(0, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &glBufferId);
+                glBindVertexArray(0);
+                
+                // Now register this buffer with CUDA
+                glInteropBuffer = memoryManager.registerGLBuffer(
+                    glBufferId,
+                    membraneWidth * membraneHeight,    // Total number of vertices
+                    sizeof(float3),                    // Size of each vertex (x,y,z as float3)
+                    cudaGraphicsRegisterFlagsWriteDiscard  // We only write to the buffer from CUDA
+                );
+                
+                std::cout << "CUDA-OpenGL interop buffer successfully registered" << std::endl;
+            }
+            catch (const CudaException& e) {
+                std::cerr << "Failed to register OpenGL buffer with CUDA: " << e.what() << std::endl;
+                std::cerr << "Falling back to CPU-based visualization" << std::endl;
+                glInteropBuffer = nullptr;  // Ensure we'll use the CPU path
+            }
+        }
         
         std::cout << "Visualization for MembraneComponent '" << name << "' initialized successfully" << std::endl;
     }

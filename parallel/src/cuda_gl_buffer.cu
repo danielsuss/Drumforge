@@ -57,17 +57,46 @@ void CudaGLBuffer::registerBuffer(GLuint bufferId, size_t count, size_t elemSize
     // Unregister any existing buffer first
     unregisterBuffer();
     
+    // Validate input
+    if (bufferId == 0) {
+        throw CudaException("Invalid OpenGL buffer ID (0) provided for CUDA registration");
+    }
+    
     glBufferId = bufferId;
     elementCount = count;
     elementSize = elemSize;
     byteSize = count * elemSize;
     
+    // Ensure the buffer exists in OpenGL
+    GLint prevBuffer;
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prevBuffer);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, glBufferId);
+    if (glGetError() != GL_NO_ERROR) {
+        throw CudaException("OpenGL buffer does not exist or cannot be bound");
+    }
+    
+    // Check buffer size in OpenGL
+    GLint bufferSize;
+    glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &bufferSize);
+    if (bufferSize < static_cast<GLint>(byteSize)) {
+        glBindBuffer(GL_ARRAY_BUFFER, prevBuffer);
+        throw CudaException("OpenGL buffer size is smaller than requested size for CUDA");
+    }
+    
+    // Restore previous buffer binding
+    glBindBuffer(GL_ARRAY_BUFFER, prevBuffer);
+    
     // Register the buffer with CUDA
+    std::cout << "Registering OpenGL buffer " << glBufferId << " with CUDA" << std::endl;
     cudaError_t error = cudaGraphicsGLRegisterBuffer(&cudaResource, glBufferId, flags);
+    
     if (error != cudaSuccess) {
         throw CudaException("Failed to register OpenGL buffer with CUDA: " + 
                            std::string(cudaGetErrorString(error)));
     }
+    
+    std::cout << "Successfully registered OpenGL buffer with CUDA" << std::endl;
 }
 
 // Unregister the buffer
@@ -98,6 +127,8 @@ void* CudaGLBuffer::map() {
     }
     
     if (!isMapped) {
+        std::cout << "Mapping OpenGL buffer " << glBufferId << " for CUDA access..." << std::endl;
+        
         // Synchronize before mapping to ensure any previous GPU operations are complete
         cudaError_t error = cudaDeviceSynchronize();
         if (error != cudaSuccess) {
@@ -129,6 +160,8 @@ void* CudaGLBuffer::map() {
             std::cerr << "Warning: Mapped size (" << mappedSize << ") doesn't match expected size (" 
                       << byteSize << ")" << std::endl;
         }
+        
+        std::cout << "Buffer mapped successfully, device pointer: " << devicePtr << std::endl;
     }
     
     return devicePtr;
@@ -137,6 +170,8 @@ void* CudaGLBuffer::map() {
 // Unmap the buffer
 void CudaGLBuffer::unmap() {
     if (cudaResource && isMapped) {
+        std::cout << "Unmapping OpenGL buffer " << glBufferId << " from CUDA..." << std::endl;
+        
         // Synchronize before unmapping to ensure all CUDA operations are complete
         cudaError_t error = cudaDeviceSynchronize();
         if (error != cudaSuccess) {
@@ -151,6 +186,8 @@ void CudaGLBuffer::unmap() {
         }
         isMapped = false;
         devicePtr = nullptr;
+        
+        std::cout << "Buffer unmapped successfully" << std::endl;
     }
 }
 
@@ -184,7 +221,16 @@ bool isInteropSupported() {
         return false;
     }
     
-    // OpenGL interop requires compute capability 1.1 or higher and canMapHostMemory
+    // Print more detailed interop capability information
+    std::cout << "CUDA Interop Capability Check:" << std::endl;
+    std::cout << "  Compute Capability: " << props.major << "." << props.minor << std::endl;
+    std::cout << "  canMapHostMemory: " << (props.canMapHostMemory ? "Yes" : "No") << std::endl;
+    
+    // Additional checks that might be relevant for interop
+    // Note: Driver version and OpenGL version can also affect interop support,
+    // but these are harder to check programmatically
+    
+    // OpenGL interop requires compute capability 1.1 or higher and typically canMapHostMemory
     return (props.major > 1 || (props.major == 1 && props.minor >= 1)) && props.canMapHostMemory;
 }
 
@@ -192,24 +238,48 @@ bool isInteropSupported() {
 std::shared_ptr<CudaGLBuffer> createBuffer(size_t count, size_t elemSize, 
                                           GLenum target, GLenum usage) {
     // Verify we have a valid OpenGL context
-    if (glGetError() != GL_NO_ERROR) {
-        throw CudaException("OpenGL error detected before creating buffer");
+    GLenum glError = glGetError();
+    if (glError != GL_NO_ERROR) {
+        throw CudaException("OpenGL error detected before creating buffer: " + 
+                           std::to_string(glError));
     }
     
     // Create an OpenGL buffer
     GLuint bufferId = 0;
     glGenBuffers(1, &bufferId);
+    if (bufferId == 0) {
+        throw CudaException("Failed to generate OpenGL buffer");
+    }
+    
     glBindBuffer(target, bufferId);
+    
+    // Print buffer creation info
+    std::cout << "Creating OpenGL buffer " << bufferId
+              << " with " << count << " elements of size " << elemSize
+              << " (total " << (count * elemSize) << " bytes)" << std::endl;
+    
     glBufferData(target, count * elemSize, nullptr, usage);
-    glBindBuffer(target, 0);
     
     // Check for errors in buffer creation
-    GLenum glError = glGetError();
+    glError = glGetError();
     if (glError != GL_NO_ERROR) {
         glDeleteBuffers(1, &bufferId);
         throw CudaException("Failed to create OpenGL buffer, error code: " + 
                            std::to_string(glError));
     }
+    
+    // Additional validation: check that the buffer was created with the correct size
+    GLint bufferSize;
+    glGetBufferParameteriv(target, GL_BUFFER_SIZE, &bufferSize);
+    if (bufferSize != static_cast<GLint>(count * elemSize)) {
+        glDeleteBuffers(1, &bufferId);
+        throw CudaException("OpenGL buffer created with incorrect size: " +
+                           std::to_string(bufferSize) + " (expected " +
+                           std::to_string(count * elemSize) + ")");
+    }
+    
+    // Unbind the buffer
+    glBindBuffer(target, 0);
     
     // Register it with CUDA
     try {

@@ -25,11 +25,31 @@ int main(int argc, char* argv[]) {
     std::cout << "DrumForge Parallel - Starting up..." << std::endl;
     
     try {
-        // Initialize CUDA memory manager FIRST!
-        // This is important for proper CUDA-OpenGL interop
+        // IMPORTANT: Initialize VISUALIZATION MANAGER FIRST!
+        // This is critical for proper CUDA-OpenGL interop - OpenGL context must exist
+        // before CUDA tries to use it
+        std::cout << "Initializing visualization manager..." << std::endl;
+        drumforge::VisualizationManager& visManager = drumforge::VisualizationManager::getInstance();
+        if (!visManager.initialize(1280, 720, "DrumForge - Visualization Test")) {
+            std::cerr << "Failed to initialize visualization - cannot continue" << std::endl;
+            return 1;
+        }
+        std::cout << "Visualization initialized successfully" << std::endl;
+        
+        // After OpenGL is initialized, then initialize CUDA
         std::cout << "Initializing CUDA memory manager..." << std::endl;
-        drumforge::CudaMemoryManager::getInstance().initialize();
+        drumforge::CudaMemoryManager& cudaManager = drumforge::CudaMemoryManager::getInstance();
+        
+        cudaManager.initialize();
         CHECK_CUDA_ERRORS();
+        
+        // Check if interop is supported
+        bool interopSupported = cudaManager.isGLInteropSupported();
+        if (!interopSupported) {
+            std::cerr << "ERROR: CUDA-OpenGL interop is not supported on this system. "
+                     << "The application requires interop capabilities to run." << std::endl;
+            return 1;
+        }
         
         // Get the simulation manager
         drumforge::SimulationManager& simManager = drumforge::SimulationManager::getInstance();
@@ -70,28 +90,11 @@ int main(int argc, char* argv[]) {
         CHECK_CUDA_ERRORS();
         std::cout << "Membrane component initialized successfully" << std::endl;
         
-        // Initialize visualization
-        std::cout << "Initializing visualization manager..." << std::endl;
-        drumforge::VisualizationManager& visManager = drumforge::VisualizationManager::getInstance();
-        if (!visManager.initialize(1280, 720, "DrumForge - Visualization Test")) {
-            std::cerr << "Failed to initialize visualization" << std::endl;
-            return 1;
-        }
-        
-        std::cout << "Visualization initialized successfully" << std::endl;
-        
         // Test the visualization loop
         std::cout << "Starting visualization test loop..." << std::endl;
         
         // Fixed timestep for simulation
-        const float timestep = 1.0f / 5.0f;  // ~60 FPS
-        
-        // Apply initial impulse to the membrane
-        // membrane->applyImpulse(0.5f, 0.5f, 0.1f);
-        CHECK_CUDA_ERRORS();
-        
-        // Main visualization test loop - run until window is closed
-        int frameCount = 0;
+        const float timestep = 1.0f / 60.0f;  // ~60 FPS
         
         // Connect the membrane to the input handler for click interaction
         auto inputHandler = visManager.getInputHandler();
@@ -102,8 +105,6 @@ int main(int argc, char* argv[]) {
         
         // Main loop
         while (!visManager.shouldClose()) {
-            frameCount++;
-            
             // Process input (camera movement, mouse clicks, etc.)
             if (inputHandler) {
                 inputHandler->processInput(timestep);
@@ -116,26 +117,29 @@ int main(int argc, char* argv[]) {
             
             // Advance simulation
             simManager.advance(timestep);
+            CHECK_CUDA_ERRORS();
             
             // Render frame
             visManager.beginFrame();
             visManager.renderComponents(simManager);
             visManager.endFrame();
+            CHECK_CUDA_ERRORS();
             
-            // Print status every 60 frames
-            // if (frameCount % 60 == 0) {
-            //     std::cout << "Frame " << frameCount << ": Visualization running" << std::endl;
-            // }
-            
-            // Limit frame rate
+            // Limit frame rate 
             std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 FPS
         }
         
         std::cout << "Visualization test complete" << std::endl;
         
-        // Clean up
+        // Clean up - order is important for clean shutdown
+        // First, clean up visualization resources
         visManager.shutdown();
+        
+        // Then shutdown simulation
         simManager.shutdown();
+        
+        // Finally, clean up CUDA resources
+        cudaManager.shutdown();
         
         std::cout << "DrumForge Parallel - Shutdown complete" << std::endl;
     }
