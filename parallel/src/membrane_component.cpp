@@ -3,6 +3,10 @@
 #include <stdexcept>
 #include <iostream>
 #include <cmath>
+#include <vector>
+
+// Forward declaration for VisualizationManager
+#include "visualization_manager.h"
 
 namespace drumforge {
 
@@ -19,6 +23,8 @@ MembraneComponent::MembraneComponent(const std::string& name, float radius, floa
     , membraneWidth(0)
     , membraneHeight(0)
     , cellSize(0.0f)
+    , vaoId(0)
+    , eboId(0)
     , name(name)
     , kernelParams(new MembraneKernelParams())
     , pendingImpulse{0.0f, 0.0f, 0.0f, false} {
@@ -33,6 +39,8 @@ MembraneComponent::~MembraneComponent() {
     if (region.sizeX > 0 && region.sizeY > 0) {
         simulationManager.releaseGridRegion(region);
     }
+    
+    // OpenGL resources will be cleaned up by the VisualizationManager
     
     // CUDA buffers are automatically released by shared_ptr destruction
 }
@@ -107,12 +115,10 @@ void MembraneComponent::initialize() {
     resetMembrane(d_heights->get(), d_prevHeights->get(), d_velocities->get(), 
                  d_circleMask->get(), *kernelParams);
     
-    // Set up OpenGL interop for visualization if needed
+    // Set up OpenGL interop for visualization
     try {
-        // Request a CudaGLBuffer from the memory manager for OpenGL interop
-        // We'll need this for visualization, but only create it if OpenGL interop is supported
+        // Check if CUDA-OpenGL interop is supported
         if (memoryManager.isGLInteropSupported()) {
-            // This will be initialized later when an OpenGL context is available
             std::cout << "CUDA-OpenGL interoperability supported, visualization will be available" << std::endl;
         } else {
             std::cout << "CUDA-OpenGL interoperability not supported, visualization will be limited" << std::endl;
@@ -177,6 +183,82 @@ std::string MembraneComponent::getName() const {
 float MembraneComponent::calculateStableTimestep() const {
     // Use the kernel helper to calculate a stable timestep
     return ::drumforge::calculateStableTimestep(*kernelParams);
+}
+
+//-----------------------------------------------------------------------------
+// Visualization Methods
+//-----------------------------------------------------------------------------
+
+void MembraneComponent::initializeVisualization(VisualizationManager& visManager) {
+    if (glInteropBuffer != nullptr) {
+        // Already initialized
+        return;
+    }
+    
+    std::cout << "Initializing visualization for MembraneComponent '" << name << "'..." << std::endl;
+    
+    try {
+        // Create an OpenGL Vertex Buffer Object (VBO) through the VisualizationManager
+        unsigned int vbo = visManager.createVertexBuffer(membraneWidth * membraneHeight * sizeof(float3));
+        
+        // Register the buffer with CUDA
+        glInteropBuffer = memoryManager.registerGLBuffer(vbo, membraneWidth * membraneHeight, sizeof(float3));
+        
+        // Create Vertex Array Object (VAO) through the VisualizationManager
+        vaoId = visManager.createVertexArray();
+        
+        // Configure vertex attributes
+        visManager.configureVertexAttributes(vaoId, vbo, 0, 3, sizeof(float3), 0);
+        
+        // Generate indices for wireframe rendering
+        std::vector<unsigned int> indices;
+        
+        // Generate row lines
+        for (int y = 0; y < membraneHeight; y++) {
+            for (int x = 0; x < membraneWidth - 1; x++) {
+                indices.push_back(y * membraneWidth + x);
+                indices.push_back(y * membraneWidth + x + 1);
+            }
+        }
+        
+        // Generate column lines
+        for (int x = 0; x < membraneWidth; x++) {
+            for (int y = 0; y < membraneHeight - 1; y++) {
+                indices.push_back(y * membraneWidth + x);
+                indices.push_back((y + 1) * membraneWidth + x);
+            }
+        }
+        
+        // Create Element Buffer Object (EBO) through the VisualizationManager
+        eboId = visManager.createIndexBuffer(indices.data(), indices.size() * sizeof(unsigned int));
+        
+        std::cout << "Visualization for MembraneComponent '" << name << "' initialized successfully" << std::endl;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error initializing visualization: " << e.what() << std::endl;
+        throw;
+    }
+}
+
+void MembraneComponent::visualize(VisualizationManager& visManager) {
+    // Prepare data for visualization first (update vertex buffer via CUDA)
+    prepareForVisualization();
+    
+    // Tell the visualization manager to render this component
+    // The membrane uses a simple wireframe with a blue color
+    visManager.renderWireframe(
+        vaoId,                  // VAO containing the membrane geometry
+        eboId,                  // EBO containing the wireframe indices
+        getIndexCount(),        // Number of indices to draw
+        glm::vec3(0.2f, 0.3f, 0.8f)  // Blue color for the membrane
+    );
+}
+
+int MembraneComponent::getIndexCount() const {
+    // Calculate total number of indices for the wireframe
+    int numRowLines = membraneHeight * (membraneWidth - 1) * 2;
+    int numColLines = membraneWidth * (membraneHeight - 1) * 2;
+    return numRowLines + numColLines;
 }
 
 //-----------------------------------------------------------------------------

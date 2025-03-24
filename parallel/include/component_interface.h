@@ -3,12 +3,14 @@
 
 #include <string>
 #include <memory>
+#include <glm/glm.hpp>
 
 namespace drumforge {
 
 // Forward declarations
 class SimulationManager;
 class CudaMemoryManager;
+class VisualizationManager;
 
 // Structure to hold coupling data for interaction between components
 struct CouplingData {
@@ -56,6 +58,36 @@ public:
     };
     
     virtual DimensionRequirement getDimensionRequirement() const = 0;
+    
+    // Visualization-related methods
+    
+    /**
+     * @brief Check if component supports visualization
+     * 
+     * @return true if the component can be rendered visually
+     * @return false if the component is simulation-only
+     */
+    virtual bool isVisualizable() const { return false; }
+    
+    /**
+     * @brief Initialize visualization resources for this component
+     * 
+     * This method is called by the VisualizationManager during setup.
+     * Components should use this to initialize any OpenGL resources they need.
+     * 
+     * @param visManager Reference to the visualization manager
+     */
+    virtual void initializeVisualization(VisualizationManager& visManager) {}
+    
+    /**
+     * @brief Provide component-specific visualization data
+     * 
+     * This method allows the component to provide visualization parameters to the
+     * VisualizationManager, which handles the actual rendering.
+     * 
+     * @param visManager Reference to the visualization manager
+     */
+    virtual void visualize(VisualizationManager& visManager) {}
 };
 
 } // namespace drumforge

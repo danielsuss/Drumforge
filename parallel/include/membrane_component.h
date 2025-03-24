@@ -12,8 +12,9 @@
 
 namespace drumforge {
 
-// Forward declaration of CUDA kernel parameters
+// Forward declarations
 struct MembraneKernelParams;
+class VisualizationManager;
 
 /**
  * MembraneComponent simulates a circular drum membrane using CUDA-accelerated
@@ -49,6 +50,10 @@ private:
     // OpenGL interop buffer for visualization
     std::shared_ptr<CudaGLBuffer> glInteropBuffer;  // Obtained from CudaMemoryManager
 
+    // OpenGL resource IDs
+    unsigned int vaoId;        // Vertex Array Object ID
+    unsigned int eboId;        // Element Buffer Object ID
+    
     // Host-side data for CPU access (mostly for I/O)
     mutable std::vector<float> h_heights;
 
@@ -97,6 +102,11 @@ public:
     DimensionRequirement getDimensionRequirement() const override {
         return DimensionRequirement::DIMENSION_2D;
     }
+    
+    // Visualization-related methods
+    bool isVisualizable() const override { return true; }
+    void initializeVisualization(VisualizationManager& visManager) override;
+    void visualize(VisualizationManager& visManager) override;
 
     // Membrane-specific methods
     void applyImpulse(float x, float y, float strength);
@@ -108,6 +118,12 @@ public:
     int getMembraneWidth() const { return membraneWidth; }
     int getMembraneHeight() const { return membraneHeight; }
     float getRadius() const { return radius; }
+    
+    // OpenGL resource access for visualization manager
+    unsigned int getVAO() const { return vaoId; }
+    unsigned int getEBO() const { return eboId; }
+    int getVertexCount() const { return membraneWidth * membraneHeight; }
+    int getIndexCount() const;
     
     // Check if a point is inside the circular membrane
     bool isInsideCircle(int x, int y) const;
