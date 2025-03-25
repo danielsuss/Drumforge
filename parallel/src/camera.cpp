@@ -19,7 +19,7 @@ Camera::Camera(
     , aspectRatio(aspectRatio)
     , nearPlane(nearPlane)
     , farPlane(farPlane)
-    , moveSpeed(10.0f) {
+    , moveSpeed(0.5f) {
     
     // Initialize camera vectors
     updateCameraVectors();
@@ -82,58 +82,84 @@ void Camera::moveForward(float distance) {
     // Calculate normalized direction from position to target
     glm::vec3 direction = glm::normalize(target - position);
     
+    // Apply moveSpeed to the distance
+    float actualDistance = distance * moveSpeed;
+    
     // Move both position and target along this direction
-    glm::vec3 movement = direction * distance;
+    glm::vec3 movement = direction * actualDistance;
     position += movement;
     target += movement;
 }
 
 void Camera::moveRight(float distance) {
+    // Apply moveSpeed to the distance
+    float actualDistance = distance * moveSpeed;
+    
     // Move both position and target along the right vector
-    glm::vec3 movement = right * distance;
+    glm::vec3 movement = right * actualDistance;
     position += movement;
     target += movement;
 }
 
 void Camera::moveUp(float distance) {
-    // Move both position and target along the up vector
-    glm::vec3 movement = up * distance;
+    // Apply moveSpeed to the distance
+    float actualDistance = distance * moveSpeed;
+    
+    // Move both position and target along the world up vector
+    // Using worldUp instead of up ensures consistent vertical movement
+    glm::vec3 movement = up * actualDistance;
     position += movement;
     target += movement;
 }
 
 void Camera::panTargetRight(float distance) {
-    // Pan the target point left/right relative to the camera
-    glm::vec3 movement = right * distance;
-    
-    // Only move the target, not the camera position
-    target += movement;
+    // Apply moveSpeed to the distance (with a smaller factor for rotation)
+    float actualDistance = distance * (moveSpeed * 0.5f);
     
     // Calculate the distance from camera to target
     float targetDistance = glm::length(target - position);
     
+    // Rotate the target around the camera position along the right vector
+    // First, move the target relative to the camera
+    glm::vec3 relativeTarget = target - position;
+    
+    // Create a rotation matrix around the up vector
+    float angle = actualDistance / targetDistance;  // Small angle approximation
+    glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), angle, worldUp);
+    
+    // Apply rotation to the relative target
+    glm::vec4 rotatedTarget = rotation * glm::vec4(relativeTarget, 1.0f);
+    
+    // Move the target back to world space
+    target = position + glm::vec3(rotatedTarget);
+    
     // Update camera vectors
     updateCameraVectors();
-    
-    // Ensure the camera maintains the same distance from the target
-    position = target - getForwardDirection() * targetDistance;
 }
 
 void Camera::panTargetUp(float distance) {
-    // Pan the target point up/down relative to the camera
-    glm::vec3 movement = up * distance;
-    
-    // Only move the target, not the camera position
-    target += movement;
+    // Apply moveSpeed to the distance (with a smaller factor for rotation)
+    float actualDistance = distance * (moveSpeed * 0.5f);
     
     // Calculate the distance from camera to target
     float targetDistance = glm::length(target - position);
     
+    // Rotate the target around the camera position along the up vector
+    // First, move the target relative to the camera
+    glm::vec3 relativeTarget = target - position;
+    
+    // Create a rotation matrix around the right vector
+    float angle = actualDistance / targetDistance;  // Small angle approximation
+    glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), angle, right);
+    
+    // Apply rotation to the relative target
+    glm::vec4 rotatedTarget = rotation * glm::vec4(relativeTarget, 1.0f);
+    
+    // Move the target back to world space
+    target = position + glm::vec3(rotatedTarget);
+    
     // Update camera vectors
     updateCameraVectors();
-    
-    // Ensure the camera maintains the same distance from the target
-    position = target - getForwardDirection() * targetDistance;
 }
 
 void Camera::reset(const glm::vec3& newPosition, const glm::vec3& newTarget) {

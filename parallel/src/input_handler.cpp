@@ -14,7 +14,7 @@ InputHandler::InputHandler(GLFWwindow* window)
     , camera(nullptr)
     , firstMouse(true)
     , lastMousePos(0.0f, 0.0f)
-    , cameraMoveSpeed(1.0f)
+    , cameraMoveSpeed(1.0f)  // Not directly used, as camera has internal speed
     , windowWidth(1280)
     , windowHeight(720)
     , mouseLeftPressed(false)
@@ -46,43 +46,45 @@ void InputHandler::processInput(float deltaTime) {
         return;
     }
     
-    // Calculate actual movement speed based on time
-    float actualSpeed = cameraMoveSpeed * deltaTime;
-    float panSpeed = cameraMoveSpeed * 1.0f * deltaTime; // Pan speed
+    // Calculate movement based on time only - camera speed is handled internally
+    float timeScale = deltaTime;
     
-    // Process movement keys for WASD/QE
+    // Process WASD/QE movement - similar to legacy implementation
     if (movementKeys.forward) {
-        camera->moveForward(actualSpeed);
+        camera->moveForward(timeScale);
     }
     if (movementKeys.backward) {
-        camera->moveForward(-actualSpeed);
+        camera->moveForward(-timeScale);
     }
     if (movementKeys.left) {
-        camera->moveRight(-actualSpeed);
+        camera->moveRight(-timeScale);
     }
     if (movementKeys.right) {
-        camera->moveRight(actualSpeed);
+        camera->moveRight(timeScale);
     }
     if (movementKeys.up) {
-        camera->moveUp(actualSpeed);
+        camera->moveUp(timeScale);
     }
     if (movementKeys.down) {
-        camera->moveUp(-actualSpeed);
+        camera->moveUp(-timeScale);
     }
     
-    // Process arrow keys for target panning
+    // Process arrow keys for panning camera direction
+    // Use the same time scale for consistency
+    float panScale = timeScale;
+    
     // These direct checks allow arrow keys to work independently of movement keys
     if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
-        camera->panTargetRight(-panSpeed);
+        camera->panTargetRight(-panScale);
     }
     if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-        camera->panTargetRight(panSpeed);
+        camera->panTargetRight(panScale);
     }
     if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
-        camera->panTargetUp(panSpeed);
+        camera->panTargetUp(panScale);
     }
     if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-        camera->panTargetUp(-panSpeed);
+        camera->panTargetUp(-panScale);
     }
 }
 
@@ -113,7 +115,7 @@ void InputHandler::keyCallback(GLFWwindow* window, int key, int scancode, int ac
     if (pressed || released) {
         // Update movement keys state
         switch (key) {
-            // Original WASD controls
+            // WASD controls for camera movement
             case GLFW_KEY_W:
                 handler->movementKeys.forward = pressed;
                 break;
@@ -126,26 +128,15 @@ void InputHandler::keyCallback(GLFWwindow* window, int key, int scancode, int ac
             case GLFW_KEY_D:
                 handler->movementKeys.right = pressed;
                 break;
-            case GLFW_KEY_E:
-                handler->movementKeys.up = pressed;
-                break;
+                
+            // QE for vertical movement
             case GLFW_KEY_Q:
                 handler->movementKeys.down = pressed;
                 break;
-                
-            // Arrow keys for panning
-            case GLFW_KEY_UP:
+            case GLFW_KEY_E:
                 handler->movementKeys.up = pressed;
                 break;
-            case GLFW_KEY_DOWN:
-                handler->movementKeys.down = pressed;
-                break;
-            case GLFW_KEY_LEFT:
-                handler->movementKeys.left = pressed;
-                break;
-            case GLFW_KEY_RIGHT:
-                handler->movementKeys.right = pressed;
-                break;
+                
             case GLFW_KEY_ESCAPE:
                 if (pressed) {
                     glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -168,11 +159,6 @@ void InputHandler::keyCallback(GLFWwindow* window, int key, int scancode, int ac
                     );
                     std::cout << "Camera reset to default position" << std::endl;
                 }
-                break;
-            case GLFW_KEY_F:
-                // Toggle full screen (example of additional functionality)
-                // Implementation would depend on specific window management needs
-                std::cout << "F pressed - fullscreen toggle would go here" << std::endl;
                 break;
             case GLFW_KEY_H:
                 // Show help

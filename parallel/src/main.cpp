@@ -121,7 +121,8 @@ int main(int argc, char* argv[]) {
         while (!visManager.shouldClose()) {
             // Process input (camera movement, mouse clicks, etc.)
             if (inputHandler) {
-                inputHandler->processInput(timestep);
+                float realDeltaTime = timestep;  // Use wall-clock time for camera controls
+                inputHandler->processInput(realDeltaTime);
                 
                 // Check for escape key to close the window
                 if (inputHandler->shouldClose()) {
