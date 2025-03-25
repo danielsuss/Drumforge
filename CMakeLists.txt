@@ -26,6 +26,17 @@ find_package(glfw3 REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(glm REQUIRED)
 
+# ImGui source files
+set(IMGUI_SOURCES
+    vendor/imgui/imgui.cpp
+    vendor/imgui/imgui_demo.cpp
+    vendor/imgui/imgui_draw.cpp
+    vendor/imgui/imgui_tables.cpp
+    vendor/imgui/imgui_widgets.cpp
+    vendor/imgui/backends/imgui_impl_glfw.cpp
+    vendor/imgui/backends/imgui_impl_opengl3.cpp
+)
+
 # Legacy header files
 set(HEADERS_LEGACY
     legacy/include/membrane.h
@@ -60,6 +71,7 @@ set(HEADERS_PARALLEL
     parallel/include/camera.h
     parallel/include/input_handler.h
     parallel/include/visualization_manager.h
+    parallel/include/gui_manager.h
 )
 
 # Parallel source files
@@ -73,6 +85,7 @@ set(SOURCES_PARALLEL
     parallel/src/camera.cpp
     parallel/src/input_handler.cpp
     parallel/src/visualization_manager.cpp
+    parallel/src/gui_manager.cpp
 )
 
 # Legacy executable
@@ -82,7 +95,7 @@ add_executable(drumforge_legacy ${SOURCES_LEGACY} ${HEADERS_LEGACY})
 add_executable(cuda_test ${SOURCES_CUDA_TEST})
 
 # Parallel executable
-add_executable(drumforge_parallel ${SOURCES_PARALLEL} ${HEADERS_PARALLEL})
+add_executable(drumforge_parallel ${SOURCES_PARALLEL} ${HEADERS_PARALLEL} ${IMGUI_SOURCES})
 
 # Legacy include directories
 target_include_directories(drumforge_legacy PRIVATE 
@@ -97,6 +110,8 @@ target_include_directories(cuda_test PRIVATE
 # Parallel include directories
 target_include_directories(drumforge_parallel PRIVATE
     ${CMAKE_SOURCE_DIR}/parallel/include
+    ${CMAKE_SOURCE_DIR}/vendor/imgui
+    ${CMAKE_SOURCE_DIR}/vendor/imgui/backends
     /usr/local/cuda-12.8/include
 )
 

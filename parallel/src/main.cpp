@@ -3,6 +3,7 @@
 #include "membrane_component.h"
 #include "visualization_manager.h"
 #include "input_handler.h"
+#include "gui_manager.h"
 #include <iostream>
 #include <memory>
 #include <chrono>
@@ -104,11 +105,16 @@ int main(int argc, char* argv[]) {
         CHECK_CUDA_ERRORS();
         std::cout << "Membrane component initialized successfully" << std::endl;
         
+        // Initialize GUI manager
+        std::cout << "Initializing GUI manager..." << std::endl;
+        drumforge::GUIManager& guiManager = drumforge::GUIManager::getInstance();
+        guiManager.initialize(visManager.getWindow());
+        
         // Test the visualization loop
         std::cout << "Starting visualization test loop..." << std::endl;
         
         // Fixed timestep for simulation
-        const float timestep = 1.0f / 1.0f;  // ~60 FPS
+        const float timestep = 1.0f / 60.0f;  // ~60 FPS
         
         // Connect the membrane to the input handler for click interaction
         auto inputHandler = visManager.getInputHandler();
@@ -134,9 +140,18 @@ int main(int argc, char* argv[]) {
             simManager.advance(timestep);
             CHECK_CUDA_ERRORS();
             
+            // Begin GUI frame
+            guiManager.beginFrame();
+            
             // Render frame
             visManager.beginFrame();
             visManager.renderComponents(simManager);
+            
+            // Render GUI
+            guiManager.renderGUI(simManager, membrane);
+            guiManager.renderFrame();
+            
+            // Finish frame
             visManager.endFrame();
             CHECK_CUDA_ERRORS();
             
@@ -147,7 +162,10 @@ int main(int argc, char* argv[]) {
         std::cout << "Visualization test complete" << std::endl;
         
         // Clean up - order is important for clean shutdown
-        // First, clean up visualization resources
+        // First, clean up GUI resources
+        guiManager.shutdown();
+        
+        // Then clean up visualization resources
         visManager.shutdown();
         
         // Then shutdown simulation

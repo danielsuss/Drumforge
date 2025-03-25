@@ -470,4 +470,60 @@ bool MembraneComponent::isInsideCircle(int x, int y) const {
     return distanceSquared <= (kernelParams->radius * kernelParams->radius);
 }
 
+void MembraneComponent::setRadius(float newRadius) {
+    // Don't allow negative or zero radius
+    if (newRadius <= 0.0f) {
+        std::cerr << "Warning: Cannot set radius to " << newRadius << ". Using minimum value of 0.1f instead." << std::endl;
+        newRadius = 0.1f;
+    }
+    
+    // Update the component's radius value
+    radius = newRadius;
+    
+    // Update the kernel parameters
+    kernelParams->radius = radius / cellSize;  // Convert physical radius to grid units
+    kernelParams->radiusSquared = kernelParams->radius * kernelParams->radius;
+    
+    std::cout << "Membrane radius updated to " << radius << " (grid units: " << kernelParams->radius << ")" << std::endl;
+    
+    // Reinitialize the circular mask based on the new radius
+    initializeCircleMask(d_circleMask->get(), *kernelParams);
+    
+    // Reset the membrane with the new parameters
+    reset();
+}
+
+void MembraneComponent::setTension(float newTension) {
+    // Don't allow negative or zero tension
+    if (newTension <= 0.0f) {
+        std::cerr << "Warning: Cannot set tension to " << newTension << ". Using minimum value of 0.1f instead." << std::endl;
+        newTension = 0.1f;
+    }
+    
+    // Update the component's tension value
+    tension = newTension;
+    
+    // Update the kernel parameters
+    kernelParams->tension = tension;
+    kernelParams->waveSpeed = sqrt(tension);  // Wave speed derived from tension
+    
+    std::cout << "Membrane tension updated to " << tension << " (wave speed: " << kernelParams->waveSpeed << ")" << std::endl;
+}
+
+void MembraneComponent::setDamping(float newDamping) {
+    // Ensure damping is non-negative
+    if (newDamping < 0.0f) {
+        std::cerr << "Warning: Cannot set damping to " << newDamping << ". Using minimum value of 0.0f instead." << std::endl;
+        newDamping = 0.0f;
+    }
+    
+    // Update the component's damping value
+    damping = newDamping;
+    
+    // Update the kernel parameters
+    kernelParams->damping = damping;
+    
+    std::cout << "Membrane damping updated to " << damping << std::endl;
+}
+
 } // namespace drumforge

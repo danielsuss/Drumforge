@@ -112,12 +112,19 @@ public:
     void applyImpulse(float x, float y, float strength);
     void reset();
 
+    // Parameter setters - for GUI control
+    void setRadius(float newRadius);
+    void setTension(float newTension);
+    void setDamping(float newDamping);
+
     // Accessors
     const std::vector<float>& getHeights() const;
     float getHeight(int x, int y) const;
     int getMembraneWidth() const { return membraneWidth; }
     int getMembraneHeight() const { return membraneHeight; }
     float getRadius() const { return radius; }
+    float getTension() const { return tension; }
+    float getDamping() const { return damping; }
     
     // OpenGL resource access for visualization manager
     unsigned int getVAO() const { return vaoId; }

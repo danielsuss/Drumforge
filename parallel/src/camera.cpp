@@ -19,7 +19,7 @@ Camera::Camera(
     , aspectRatio(aspectRatio)
     , nearPlane(nearPlane)
     , farPlane(farPlane)
-    , moveSpeed(0.5f) {
+    , moveSpeed(5.0f) {
     
     // Initialize camera vectors
     updateCameraVectors();
