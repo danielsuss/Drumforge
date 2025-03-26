@@ -53,21 +53,37 @@ MembraneComponent::~MembraneComponent() {
 //-----------------------------------------------------------------------------
 
 void MembraneComponent::initialize() {
-    std::cout << "Initializing MembraneComponent '" << name << "'..." << std::endl;
-    
-    // Get simulation parameters from SimulationManager
+    // Get parameters from simulation manager
     const auto& params = simulationManager.getParameters();
     cellSize = params.cellSize;
     
     // Determine membrane dimensions based on radius
-    // We need enough cells to cover the circular membrane
-    // Add padding to ensure the membrane fits within the grid
-    const int padding = 4;  // Extra cells around the membrane for boundary
+    // Add padding for boundary conditions
+    const int padding = 4;  
     int membraneSize = static_cast<int>(2.0f * radius / cellSize) + 2 * padding;
     
     // Ensure membrane size is even for symmetry
     if (membraneSize % 2 != 0) {
         membraneSize++;
+    }
+    
+    // Check if membrane would be too large for the grid
+    const int maxGridDimension = std::min(params.gridSizeX, params.gridSizeY);
+    if (membraneSize > maxGridDimension) {
+        // Calculate the maximum radius that would fit
+        float maxRadius = (maxGridDimension - 2 * padding) * cellSize / 2.0f;
+        
+        std::cout << "WARNING: Specified radius (" << radius << ") is too large for the grid." << std::endl;
+        std::cout << "         Reducing radius to " << maxRadius << " to fit within grid." << std::endl;
+        
+        // Adjust radius to fit
+        radius = maxRadius;
+        
+        // Recalculate membrane size with the new radius
+        membraneSize = static_cast<int>(2.0f * radius / cellSize) + 2 * padding;
+        if (membraneSize % 2 != 0) {
+            membraneSize++;
+        }
     }
     
     membraneWidth = membraneSize;
