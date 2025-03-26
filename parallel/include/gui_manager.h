@@ -14,6 +14,14 @@ namespace drumforge {
 namespace drumforge {
 
 /**
+ * @brief Represents the application state for GUI rendering
+ */
+enum class AppState {
+    MAIN_MENU,      // Initial configuration menu
+    SIMULATION      // Active simulation
+};
+
+/**
  * @brief Manages the Dear ImGui-based GUI for the application
  * 
  * This class handles the setup, rendering, and state management for
@@ -29,18 +37,35 @@ private:
     
     // State tracking
     bool initialized;
+    AppState currentState;
+    bool stateChanged;  // Flag to track state transitions
     
-    // GUI state variables
+    // GUI state variables for configuration menu
     struct {
         // SimulationManager params
         float timeScale;
-        int gridSize;  // X, Y, Z will be the same
+        int gridSizeX;  
+        int gridSizeY;
+        int gridSizeZ;
+        float cellSize;
         
         // Membrane params
         float radius;
         float tension;
         float damping;
-    } guiState;
+        
+        // Flags
+        bool readyToInitialize;  // Set when user confirms settings
+        bool simulationInitialized;  // Set when simulation has been initialized
+    } configState;
+    
+    // GUI state variables for simulation controls
+    struct {
+        float timeScale;
+        float tension;
+        float damping;
+        bool showDebugInfo;
+    } runtimeState;
     
     // Constructor (private for singleton)
     GUIManager();
@@ -68,11 +93,36 @@ public:
     // Render the GUI (call after all ImGui commands)
     void renderFrame();
     
-    // Render all GUI controls
+    // Render the appropriate GUI based on application state
     void renderGUI(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane);
     
-    // Apply any parameter changes to the simulation
-    void applyChanges(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane);
+    // Application state methods
+    AppState getState() const { return currentState; }
+    void setState(AppState newState);
+    bool hasStateChanged() const { return stateChanged; }
+    void clearStateChanged() { stateChanged = false; }
+
+    // Check if simulation should be initialized (after config)
+    bool shouldInitializeSimulation() const { return configState.readyToInitialize && !configState.simulationInitialized; }
+    void setSimulationInitialized() { configState.simulationInitialized = true; }
+    
+    // Get configuration parameters
+    int getConfigGridSizeX() const { return configState.gridSizeX; }
+    int getConfigGridSizeY() const { return configState.gridSizeY; }
+    int getConfigGridSizeZ() const { return configState.gridSizeZ; }
+    float getConfigCellSize() const { return configState.cellSize; }
+    float getConfigRadius() const { return configState.radius; }
+    float getConfigTension() const { return configState.tension; }
+    float getConfigDamping() const { return configState.damping; }
+    float getConfigTimeScale() const { return configState.timeScale; }
+
+private:
+    // Render specific GUI screens
+    void renderMainMenu();
+    void renderSimulationGUI(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane);
+    
+    // Apply runtime parameter changes to the simulation
+    void applyRuntimeChanges(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane);
 };
 
 } // namespace drumforge

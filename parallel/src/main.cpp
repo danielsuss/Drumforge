@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
         // before CUDA tries to use it
         std::cout << "Initializing visualization manager..." << std::endl;
         drumforge::VisualizationManager& visManager = drumforge::VisualizationManager::getInstance();
-        if (!visManager.initialize(1280, 720, "DrumForge - Visualization Test")) {
+        if (!visManager.initialize(1280, 720, "DrumForge")) {
             std::cerr << "Failed to initialize visualization - cannot continue" << std::endl;
             return 1;
         }
@@ -69,63 +69,22 @@ int main(int argc, char* argv[]) {
         // Get the simulation manager
         drumforge::SimulationManager& simManager = drumforge::SimulationManager::getInstance();
         
-        // Initialize the simulation
-        simManager.initialize();
-        CHECK_CUDA_ERRORS();
-        
-        std::cout << "SimulationManager initialized successfully!" << std::endl;
-        
-        // Modify simulation parameters - use smaller grid for testing
-        drumforge::SimulationParameters params = simManager.getParameters();
-        params.timeScale = 2.0f;
-        params.gridSizeX = 128;
-        params.gridSizeY = 128;
-        params.gridSizeZ = 16;
-        params.cellSize = 0.1f;
-        simManager.updateParameters(params);
-        
-        std::cout << "Simulation parameters updated (gridSize = " 
-                  << params.gridSizeX << "x" << params.gridSizeY << "x" << params.gridSizeZ
-                  << ", cellSize = " << params.cellSize << ")" << std::endl;
-        
-        // Create a simple membrane component
-        std::cout << "Creating membrane component..." << std::endl;
-        auto membrane = std::make_shared<drumforge::MembraneComponent>(
-            "Drumhead", 
-            5.0f,    // Radius
-            100.0f,   // Tension
-            0.01f    // Damping
-        );
-        
-        // Add membrane to simulation
-        simManager.addComponent(membrane);
-        
-        // Initialize the membrane component
-        membrane->initialize();
-        CHECK_CUDA_ERRORS();
-        std::cout << "Membrane component initialized successfully" << std::endl;
-        
         // Initialize GUI manager
         std::cout << "Initializing GUI manager..." << std::endl;
         drumforge::GUIManager& guiManager = drumforge::GUIManager::getInstance();
         guiManager.initialize(visManager.getWindow());
         
-        // Test the visualization loop
-        std::cout << "Starting visualization test loop..." << std::endl;
+        // Create a shared pointer for the membrane component (will initialize later)
+        std::shared_ptr<drumforge::MembraneComponent> membrane = nullptr;
         
         // Fixed timestep for simulation
-        const float timestep = 1.0f / 60.0f;  // ~60 FPS
-        
-        // Connect the membrane to the input handler for click interaction
-        auto inputHandler = visManager.getInputHandler();
-        if (inputHandler) {
-            inputHandler->connectMembrane(membrane);
-            std::cout << "Membrane connected to input handler - click on the membrane to apply impulses" << std::endl;
-        }
+        const float timestep = 1.0f / 1.0f;  // ~60 FPS
+        bool simulationInitialized = false;
         
         // Main loop
         while (!visManager.shouldClose()) {
             // Process input (camera movement, mouse clicks, etc.)
+            auto inputHandler = visManager.getInputHandler();
             if (inputHandler) {
                 float realDeltaTime = timestep;  // Use wall-clock time for camera controls
                 inputHandler->processInput(realDeltaTime);
@@ -136,24 +95,98 @@ int main(int argc, char* argv[]) {
                 }
             }
             
-            // Advance simulation
-            simManager.advance(timestep);
-            CHECK_CUDA_ERRORS();
-            
             // Begin GUI frame
             guiManager.beginFrame();
             
-            // Render frame
-            visManager.beginFrame();
-            visManager.renderComponents(simManager);
+            // Check current application state
+            drumforge::AppState currentState = guiManager.getState();
             
-            // Render GUI
+            // Check if we need to initialize the simulation for the first time
+            if (guiManager.shouldInitializeSimulation() && !simulationInitialized) {
+                // Get configuration parameters from GUI
+                int gridSizeX = guiManager.getConfigGridSizeX();
+                int gridSizeY = guiManager.getConfigGridSizeY();
+                int gridSizeZ = guiManager.getConfigGridSizeZ();
+                float cellSize = guiManager.getConfigCellSize();
+                float membraneRadius = guiManager.getConfigRadius();
+                float membraneTension = guiManager.getConfigTension();
+                float membraneDamping = guiManager.getConfigDamping();
+                float timeScale = guiManager.getConfigTimeScale();
+                
+                // Initialize the simulation
+                simManager.initialize();
+                CHECK_CUDA_ERRORS();
+                
+                std::cout << "SimulationManager initialized successfully!" << std::endl;
+                
+                // Apply configuration parameters
+                drumforge::SimulationParameters params = simManager.getParameters();
+                params.timeScale = timeScale;
+                params.gridSizeX = gridSizeX;
+                params.gridSizeY = gridSizeY;
+                params.gridSizeZ = gridSizeZ;
+                params.cellSize = cellSize;
+                simManager.updateParameters(params);
+                
+                std::cout << "Simulation parameters updated (gridSize = " 
+                          << params.gridSizeX << "x" << params.gridSizeY << "x" << params.gridSizeZ
+                          << ", cellSize = " << params.cellSize << ")" << std::endl;
+                
+                // Create the membrane component
+                std::cout << "Creating membrane component..." << std::endl;
+                membrane = std::make_shared<drumforge::MembraneComponent>(
+                    "Drumhead", 
+                    membraneRadius,   // Radius
+                    membraneTension,  // Tension
+                    membraneDamping   // Damping
+                );
+                
+                // Add membrane to simulation
+                simManager.addComponent(membrane);
+                
+                // Initialize the membrane component
+                membrane->initialize();
+                CHECK_CUDA_ERRORS();
+                std::cout << "Membrane component initialized successfully" << std::endl;
+                
+                // Connect the membrane to the input handler for click interaction
+                if (inputHandler) {
+                    inputHandler->connectMembrane(membrane);
+                    std::cout << "Membrane connected to input handler - click on the membrane to apply impulses" << std::endl;
+                }
+                
+                // Mark simulation as initialized
+                simulationInitialized = true;
+                guiManager.setSimulationInitialized();
+            }
+            
+            // Only advance simulation if we're in simulation state and it's initialized
+            if (currentState == drumforge::AppState::SIMULATION && simulationInitialized) {
+                // Advance simulation
+                simManager.advance(timestep);
+                CHECK_CUDA_ERRORS();
+            }
+            
+            // Begin rendering frame
+            visManager.beginFrame();
+            
+            // Only render simulation components if in simulation state and initialized
+            if (currentState == drumforge::AppState::SIMULATION && simulationInitialized) {
+                visManager.renderComponents(simManager);
+            }
+            
+            // Render GUI (this handles rendering the appropriate UI based on state)
             guiManager.renderGUI(simManager, membrane);
             guiManager.renderFrame();
             
             // Finish frame
             visManager.endFrame();
             CHECK_CUDA_ERRORS();
+            
+            // Clear state changed flag if it was set
+            if (guiManager.hasStateChanged()) {
+                guiManager.clearStateChanged();
+            }
             
             // Limit frame rate 
             std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 FPS

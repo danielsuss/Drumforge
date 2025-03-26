@@ -17,14 +17,27 @@ std::unique_ptr<GUIManager> GUIManager::instance = nullptr;
 
 GUIManager::GUIManager()
     : window(nullptr)
-    , initialized(false) {
+    , initialized(false)
+    , currentState(AppState::MAIN_MENU)
+    , stateChanged(false) {
     
-    // Initialize GUI state with defaults
-    guiState.timeScale = 1.0f;
-    guiState.gridSize = 64;
-    guiState.radius = 5.0f;
-    guiState.tension = 100.0f;
-    guiState.damping = 0.01f;
+    // Initialize configuration state with defaults
+    configState.timeScale = 1.0f;
+    configState.gridSizeX = 128;
+    configState.gridSizeY = 128;
+    configState.gridSizeZ = 16;
+    configState.cellSize = 0.1f;
+    configState.radius = 5.0f;
+    configState.tension = 100.0f;
+    configState.damping = 0.01f;
+    configState.readyToInitialize = false;
+    configState.simulationInitialized = false;
+    
+    // Initialize runtime state with defaults
+    runtimeState.timeScale = 1.0f;
+    runtimeState.tension = 100.0f;
+    runtimeState.damping = 0.01f;
+    runtimeState.showDebugInfo = false;
 }
 
 GUIManager::~GUIManager() {
@@ -118,63 +131,147 @@ void GUIManager::renderGUI(SimulationManager& simManager, std::shared_ptr<Membra
         return;
     }
     
-    // Sync GUI state with current simulation parameters on first run
-    static bool firstRun = true;
-    if (firstRun) {
-        const auto& params = simManager.getParameters();
-        guiState.timeScale = params.timeScale;
-        guiState.gridSize = params.gridSizeX; // Assuming X, Y, Z are the same
-        
-        if (membrane) {
-            guiState.radius = membrane->getRadius();
+    // Render the appropriate GUI based on current state
+    switch (currentState) {
+        case AppState::MAIN_MENU:
+            renderMainMenu();
+            break;
             
-            // For tension and damping, we'll need to access them differently
-            // We'll need to modify the MembraneComponent class to expose these properties
-            
-            // For now, just use default values from the constructor
-            guiState.tension = 100.0f;
-            guiState.damping = 0.01f;
-        }
-        
-        firstRun = false;
+        case AppState::SIMULATION:
+            renderSimulationGUI(simManager, membrane);
+            break;
     }
+}
+
+void GUIManager::setState(AppState newState) {
+    if (newState != currentState) {
+        currentState = newState;
+        stateChanged = true;
+        std::cout << "Application state changed to: " 
+                  << (currentState == AppState::MAIN_MENU ? "MAIN_MENU" : "SIMULATION") 
+                  << std::endl;
+    }
+}
+
+void GUIManager::renderMainMenu() {
+    // Set up centered window
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 windowSize = ImVec2(450, 500);
+    ImVec2 windowPos = ImVec2((io.DisplaySize.x - windowSize.x) * 0.5f, 
+                             (io.DisplaySize.y - windowSize.y) * 0.5f);
     
-    // Create parameter window
-    ImGui::Begin("DrumForge Parameters");
+    ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);
     
-    // Simulation settings section
-    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Simulation Settings");
+    ImGui::Begin("DrumForge - Setup", nullptr, 
+                ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | 
+                ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
+    
+    // Title and description
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "DrumForge Initial Configuration");
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // Grid Configuration Section
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Grid Configuration");
     ImGui::Separator();
     
-    // Time scale control
-    ImGui::SliderFloat("Time Scale", &guiState.timeScale, 0.1f, 10.0f, "%.1f");
-    ImGui::TextDisabled("Controls the speed of the simulation");
+    // Grid Size Controls
+    ImGui::SliderInt("Grid Size X", &configState.gridSizeX, 64, 256);
+    ImGui::SliderInt("Grid Size Y", &configState.gridSizeY, 64, 256);
+    ImGui::SliderInt("Grid Size Z", &configState.gridSizeZ, 16, 64);
     
-    // Grid size control (just one slider for X, Y, Z)
-    int gridSize = guiState.gridSize;
-    if (ImGui::SliderInt("Grid Size", &gridSize, 32, 256)) {
-        guiState.gridSize = gridSize;
+    // Cell Size Control
+    ImGui::SliderFloat("Cell Size", &configState.cellSize, 0.05f, 0.2f, "%.2f");
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // Membrane Configuration Section
+    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.8f, 1.0f), "Membrane Configuration");
+    ImGui::Separator();
+    
+    // Membrane Controls
+    ImGui::SliderFloat("Membrane Radius", &configState.radius, 1.0f, 10.0f, "%.1f");
+    
+    ImGui::SliderFloat("Tension", &configState.tension, 10.0f, 250.0f, "%.0f");
+    
+    ImGui::SliderFloat("Damping", &configState.damping, 0.001f, 0.1f, "%.3f", ImGuiSliderFlags_Logarithmic);
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // Simulation Controls Section
+    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.8f, 1.0f), "Simulation Controls");
+    ImGui::Separator();
+    
+    // Time Scale Control
+    ImGui::SliderFloat("Time Scale", &configState.timeScale, 0.1f, 1.0f, "%.1f");
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // Start Simulation Button
+    ImGui::SetCursorPosX((ImGui::GetWindowWidth() - 180) * 0.5f);
+    if (ImGui::Button("Start Simulation", ImVec2(180, 40))) {
+        configState.readyToInitialize = true;
+        setState(AppState::SIMULATION);
     }
-    ImGui::TextDisabled("Note: Grid size changes require a restart");
     
+    // Footer text
     ImGui::Spacing();
-    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), 
+                       "Press ESC at any time to exit the application");
     
-    // Membrane settings section
+    ImGui::End();
+}
+
+void GUIManager::renderSimulationGUI(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane) {
+    // Sync runtime state with current simulation parameters on first run
+    static bool firstRunInSimulation = true;
+    if (firstRunInSimulation) {
+        const auto& params = simManager.getParameters();
+        runtimeState.timeScale = params.timeScale;
+        
+        if (membrane) {
+            runtimeState.tension = membrane->getTension();
+            runtimeState.damping = membrane->getDamping();
+        }
+        
+        firstRunInSimulation = false;
+    }
+    
+    // Create main control window
+    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(300, 380), ImGuiCond_FirstUseEver);
+    ImGui::Begin("DrumForge Controls");
+    
+    // Title and brief state info
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "DrumForge Physics Controls");
+    ImGui::Separator();
+    
+    // Membrane controls
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "Membrane Properties");
     ImGui::Separator();
     
-    // Radius control
-    ImGui::SliderFloat("Radius", &guiState.radius, 1.0f, 10.0f, "%.1f");
-    ImGui::TextDisabled("Physical radius of the drum membrane");
-    
     // Tension control
-    ImGui::SliderFloat("Tension", &guiState.tension, 10.0f, 1000.0f, "%.0f");
-    ImGui::TextDisabled("Higher values create tighter, higher-pitched membranes");
+    ImGui::SliderFloat("Tension", &runtimeState.tension, 10.0f, 250.0f, "%.0f");
     
     // Damping control
-    ImGui::SliderFloat("Damping", &guiState.damping, 0.001f, 0.1f, "%.3f", ImGuiSliderFlags_Logarithmic);
-    ImGui::TextDisabled("Controls how quickly vibrations decay");
+    ImGui::SliderFloat("Damping", &runtimeState.damping, 0.001f, 0.1f, "%.3f", ImGuiSliderFlags_Logarithmic);
+    
+    ImGui::Spacing();
+    
+    // Simulation controls
+    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.8f, 1.0f), "Simulation Controls");
+    ImGui::Separator();
+    
+    // Time scale control
+    ImGui::SliderFloat("Time Scale", &runtimeState.timeScale, 0.1f, 1.0f, "%.1f");
+    
+    // Debug info toggle
+    ImGui::Checkbox("Show Debug Info", &runtimeState.showDebugInfo);
     
     // Reset button
     ImGui::Spacing();
@@ -187,39 +284,46 @@ void GUIManager::renderGUI(SimulationManager& simManager, std::shared_ptr<Membra
     // Apply button
     ImGui::SameLine();
     if (ImGui::Button("Apply Changes")) {
-        applyChanges(simManager, membrane);
+        applyRuntimeChanges(simManager, membrane);
+    }
+    
+    ImGui::Spacing();
+    
+    // Display membrane grid info
+    if (runtimeState.showDebugInfo && membrane) {
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Debug Information");
+        
+        ImGui::Text("Grid Size: %dx%dx%d", 
+                   configState.gridSizeX, 
+                   configState.gridSizeY, 
+                   configState.gridSizeZ);
+        ImGui::Text("Cell Size: %.3f", configState.cellSize);
+        ImGui::Text("Membrane Size: %dx%d", 
+                   membrane->getMembraneWidth(),
+                   membrane->getMembraneHeight());
+        ImGui::Text("Stable Timestep: %.6f", membrane->calculateStableTimestep());
     }
     
     ImGui::End();
 }
 
-void GUIManager::applyChanges(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane) {
-    // Apply simulation manager parameters
+void GUIManager::applyRuntimeChanges(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane) {
+    // Update simulation time scale
     SimulationParameters params = simManager.getParameters();
-    params.timeScale = guiState.timeScale;
-    
-    // Grid size changes would ideally require reinitialization,
-    // so we'll just note that in the UI. We still set it in case
-    // the simulation manager can handle it.
-    params.gridSizeX = guiState.gridSize;
-    params.gridSizeY = guiState.gridSize;
-    params.gridSizeZ = guiState.gridSize;
-    
+    params.timeScale = runtimeState.timeScale;
     simManager.updateParameters(params);
     
-    // Apply membrane parameters
+    // Update membrane parameters
     if (membrane) {
-        // Apply the new membrane parameters
-        membrane->setRadius(guiState.radius);
-        membrane->setTension(guiState.tension);
-        membrane->setDamping(guiState.damping);
+        membrane->setTension(runtimeState.tension);
+        membrane->setDamping(runtimeState.damping);
         
-        std::cout << "Updated membrane radius to " << guiState.radius << std::endl;
-        std::cout << "Updated membrane tension to " << guiState.tension << std::endl;
-        std::cout << "Updated membrane damping to " << guiState.damping << std::endl;
+        std::cout << "Updated membrane tension to " << runtimeState.tension << std::endl;
+        std::cout << "Updated membrane damping to " << runtimeState.damping << std::endl;
     }
     
-    std::cout << "Applied parameter changes" << std::endl;
+    std::cout << "Applied runtime parameter changes" << std::endl;
 }
 
 } // namespace drumforge
