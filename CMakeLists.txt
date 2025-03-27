@@ -89,6 +89,7 @@ set(SOURCES_PARALLEL
     parallel/src/visualization_manager.cpp
     parallel/src/gui_manager.cpp
     parallel/src/air_cavity_component.cpp
+    parallel/src/air_cavity_kernels.cu
 )
 
 # Legacy executable
