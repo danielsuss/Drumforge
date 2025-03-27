@@ -771,4 +771,63 @@ void samplePressureSlice(float* d_output, const float* d_pressure,
     }
 }
 
+float calculateStableTimestep(const AirCavityKernelParams& params) {
+    // Courant-Friedrichs-Lewy (CFL) stability condition for 3D acoustic simulations
+    // For 3D wave equation: dt <= dx / (c * sqrt(3))
+    float c = params.speedOfSound;
+    float dx = params.cellSize;
+    
+    // The theoretical maximum stable timestep
+    float maxStableTimestep = dx / (c * sqrt(3.0f));
+    
+    // Apply a safety factor (e.g., 0.8) to ensure stability
+    float safetyFactor = 0.8f;
+    return safetyFactor * maxStableTimestep;
+}
+
+dim3 calculateOptimalBlockSize3D(int dataWidth, int dataHeight, int dataDepth) {
+    // Default conservative 3D block size that works on most GPUs
+    // 4x4x4 = 64 threads per block
+    int blockSizeX = 4;
+    int blockSizeY = 4;
+    int blockSizeZ = 4;
+    
+    // For larger data volumes, we can use larger blocks
+    if (dataWidth >= 64 && dataHeight >= 64 && dataDepth >= 16) {
+        blockSizeX = 8;
+        blockSizeY = 8;
+        blockSizeZ = 2;  // Keep Z dimension smaller as volumes are often thinner in Z
+    }
+    
+    // For very large volumes, use even larger blocks
+    if (dataWidth >= 128 && dataHeight >= 128 && dataDepth >= 32) {
+        blockSizeX = 8;
+        blockSizeY = 8;
+        blockSizeZ = 4;
+    }
+    
+    return dim3(blockSizeX, blockSizeY, blockSizeZ);
+}
+
+dim3 calculateOptimalBlockSize2D(int dataWidth, int dataHeight) {
+    // Default conservative 2D block size that works on most GPUs
+    // 8x8 = 64 threads per block
+    int blockSizeX = 8;
+    int blockSizeY = 8;
+    
+    // For larger data areas, we can use larger blocks
+    if (dataWidth >= 64 && dataHeight >= 64) {
+        blockSizeX = 16;
+        blockSizeY = 8;
+    }
+    
+    // For very large areas, use even larger blocks
+    if (dataWidth >= 128 && dataHeight >= 128) {
+        blockSizeX = 16;
+        blockSizeY = 16;
+    }
+    
+    return dim3(blockSizeX, blockSizeY);
+}
+
 }
