@@ -72,6 +72,8 @@ set(HEADERS_PARALLEL
     parallel/include/input_handler.h
     parallel/include/visualization_manager.h
     parallel/include/gui_manager.h
+    parallel/include/air_cavity_component.h
+    parallel/include/air_cavity_kernels.cuh
 )
 
 # Parallel source files
@@ -86,6 +88,7 @@ set(SOURCES_PARALLEL
     parallel/src/input_handler.cpp
     parallel/src/visualization_manager.cpp
     parallel/src/gui_manager.cpp
+    parallel/src/air_cavity_component.cpp
 )
 
 # Legacy executable
