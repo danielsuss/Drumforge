@@ -177,7 +177,7 @@ void MembraneComponent::update(float timestep) {
     updateMembrane(d_heights->get(), d_prevHeights->get(), d_velocities->get(),
                   d_circleMask->get(), *kernelParams, safeTimestep);
 
-    updateAudio();
+    updateAudio(timestep);
 }
 
 void MembraneComponent::prepareForVisualization() {
@@ -557,7 +557,7 @@ void MembraneComponent::setAudioGain(float gain) {
     audioGain = gain;
 }
 
-void MembraneComponent::updateAudio() {
+void MembraneComponent::updateAudio(float timestep) {
     // Get reference to AudioManager
     AudioManager& audioManager = AudioManager::getInstance();
     
@@ -575,8 +575,8 @@ void MembraneComponent::updateAudio() {
             // Apply gain
             displacement *= audioGain;
             
-            // Add sample to recording buffer
-            audioManager.addSample(displacement);
+            // Process this time step with the current sample value
+            audioManager.processAudioStep(timestep, displacement);
         }
     }
 }

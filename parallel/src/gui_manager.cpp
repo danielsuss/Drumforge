@@ -330,7 +330,12 @@ void GUIManager::renderSimulationGUI(SimulationManager& simManager, std::shared_
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "● Recording");
         ImGui::SameLine();
-        ImGui::Text("(%zu samples)", audioManager.getSampleCount());
+        
+        // Show sample count and equivalent time
+        float recordedTime = audioManager.getSampleCount() / 
+                            static_cast<float>(audioManager.getSampleRate());
+        ImGui::Text("(%zu samples, %.2f seconds)", 
+                    audioManager.getSampleCount(), recordedTime);
     }
 
     // Save dialog

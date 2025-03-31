@@ -24,6 +24,16 @@ private:
     // Audio settings
     int sampleRate;
     bool isRecording;
+
+    double accumulatedTime;    // Accumulated simulation time
+    double sampleInterval;     // Time between samples (1/sampleRate)
+    
+    // Sample interpolation
+    struct {
+        float lastValue;       // Last sampled value
+        float currentValue;    // Current sampled value 
+        double lastSampleTime; // Time of last actual sample
+    } interpolationState;
     
     // Private constructor for singleton
     AudioManager();
@@ -66,6 +76,10 @@ public:
     
     // Get the record buffer
     const std::vector<float>& getRecordBuffer() const { return recordBuffer; }
+
+    void processAudioStep(float simulationTimeStep, float currentSampleValue);
+
+    float getInterpolatedSample(double time);
 };
 
 } // namespace drumforge

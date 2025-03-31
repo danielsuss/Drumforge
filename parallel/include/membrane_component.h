@@ -143,7 +143,7 @@ public:
     // Audio methods
     void setAudioSamplePoint(float x, float y);
     void setAudioGain(float gain);
-    void updateAudio();
+    void updateAudio(float timestep);
 };
 
 } // namespace drumforge
