@@ -2,6 +2,7 @@
 #include "simulation_manager.h"
 #include "membrane_component.h"
 #include "membrane_kernels.cuh"
+#include "audio_manager.h"
 
 // Include Dear ImGui
 #include "imgui.h"
@@ -303,6 +304,74 @@ void GUIManager::renderSimulationGUI(SimulationManager& simManager, std::shared_
                    membrane->getMembraneWidth(),
                    membrane->getMembraneHeight());
         ImGui::Text("Stable Timestep: %.6f", membrane->calculateStableTimestep());
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Audio Recording");
+
+    // Get reference to audio manager
+    AudioManager& audioManager = AudioManager::getInstance();
+    bool isRecording = audioManager.getIsRecording();
+
+    if (ImGui::Button(isRecording ? "Stop Recording" : "Start Recording")) {
+        if (isRecording) {
+            audioManager.stopRecording();
+            
+            // Prompt for file name
+            ImGui::OpenPopup("Save WAV File");
+        } else {
+            audioManager.startRecording();
+        }
+    }
+
+    // Recording indicator
+    if (isRecording) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "● Recording");
+        ImGui::SameLine();
+        ImGui::Text("(%zu samples)", audioManager.getSampleCount());
+    }
+
+    // Save dialog
+    static char filenameBuffer[128] = "drum_recording.wav";
+    if (ImGui::BeginPopupModal("Save WAV File", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Enter filename to save WAV file:");
+        ImGui::InputText("##filename", filenameBuffer, IM_ARRAYSIZE(filenameBuffer));
+        
+        if (ImGui::Button("Save")) {
+            if (audioManager.writeToWavFile(filenameBuffer)) {
+                ImGui::CloseCurrentPopup();
+                ImGui::OpenPopup("SaveSuccessful");
+            } else {
+                ImGui::OpenPopup("SaveFailed");
+            }
+        }
+        
+        ImGui::SameLine();
+        
+        if (ImGui::Button("Cancel")) {
+            ImGui::CloseCurrentPopup();
+        }
+        
+        // Success/failure dialogs
+        if (ImGui::BeginPopupModal("SaveSuccessful", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("WAV file saved successfully!");
+            if (ImGui::Button("OK")) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        
+        if (ImGui::BeginPopupModal("SaveFailed", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Failed to save WAV file!");
+            if (ImGui::Button("OK")) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        
+        ImGui::EndPopup();
     }
     
     ImGui::End();

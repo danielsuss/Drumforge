@@ -65,6 +65,10 @@ int main(int argc, char* argv[]) {
                 g_enableCudaGLInterop = false;  // Disable interop for the rest of the program
             }
         }
+
+        // After other manager initializations:
+        drumforge::AudioManager& audioManager = drumforge::AudioManager::getInstance();
+        audioManager.initialize(44100);  // 44.1kHz sample rate
         
         // Get the simulation manager
         drumforge::SimulationManager& simManager = drumforge::SimulationManager::getInstance();

@@ -74,6 +74,7 @@ set(HEADERS_PARALLEL
     parallel/include/gui_manager.h
     parallel/include/air_cavity_component.h
     parallel/include/air_cavity_kernels.cuh
+    parallel/include/audio_manager.h
 )
 
 # Parallel source files
@@ -90,6 +91,7 @@ set(SOURCES_PARALLEL
     parallel/src/gui_manager.cpp
     parallel/src/air_cavity_component.cpp
     parallel/src/air_cavity_kernels.cu
+    parallel/src/audio_manager.cpp
 )
 
 # Legacy executable

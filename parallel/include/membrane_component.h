@@ -5,6 +5,7 @@
 #include "cuda_memory_manager.h"
 #include "cuda_gl_buffer.h"
 #include "simulation_manager.h"
+#include "audio_manager.h"
 #include <memory>
 #include <vector>
 #include <string>
@@ -75,6 +76,10 @@ private:
     void updateBoundaryConditions();
     float calculateWaveSpeed() const;
 
+    // Audio sampling point
+    glm::vec2 audioSamplePoint;
+    float audioGain;
+
 public:
     // Constructor
     MembraneComponent(
@@ -134,6 +139,11 @@ public:
     
     // Check if a point is inside the circular membrane
     bool isInsideCircle(int x, int y) const;
+
+    // Audio methods
+    void setAudioSamplePoint(float x, float y);
+    void setAudioGain(float gain);
+    void updateAudio();
 };
 
 } // namespace drumforge

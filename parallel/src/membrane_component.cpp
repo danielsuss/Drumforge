@@ -30,6 +30,8 @@ MembraneComponent::MembraneComponent(const std::string& name, float radius, floa
     , eboId(0)
     , name(name)
     , kernelParams(new MembraneKernelParams())
+    , audioSamplePoint(0.5f, 0.5f)  // Default to center
+    , audioGain(1.0f)
     , pendingImpulse{0.0f, 0.0f, 0.0f, false} {
     
     std::cout << "MembraneComponent '" << name << "' created" << std::endl;
@@ -174,6 +176,8 @@ void MembraneComponent::update(float timestep) {
     // Update the membrane simulation
     updateMembrane(d_heights->get(), d_prevHeights->get(), d_velocities->get(),
                   d_circleMask->get(), *kernelParams, safeTimestep);
+
+    updateAudio();
 }
 
 void MembraneComponent::prepareForVisualization() {
@@ -540,6 +544,41 @@ void MembraneComponent::setDamping(float newDamping) {
     kernelParams->damping = damping;
     
     std::cout << "Membrane damping updated to " << damping << std::endl;
+}
+
+void MembraneComponent::setAudioSamplePoint(float x, float y) {
+    // Clamp to [0,1] range
+    audioSamplePoint.x = std::max(0.0f, std::min(x, 1.0f));
+    audioSamplePoint.y = std::max(0.0f, std::min(y, 1.0f));
+}
+
+
+void MembraneComponent::setAudioGain(float gain) {
+    audioGain = gain;
+}
+
+void MembraneComponent::updateAudio() {
+    // Get reference to AudioManager
+    AudioManager& audioManager = AudioManager::getInstance();
+    
+    // Only sample if recording is active
+    if (audioManager.getIsRecording()) {
+        // Convert normalized coordinates to grid coordinates
+        int gridX = static_cast<int>(audioSamplePoint.x * membraneWidth);
+        int gridY = static_cast<int>(audioSamplePoint.y * membraneHeight);
+        
+        // Get displacement at sample point
+        float displacement = 0.0f;
+        if (isInsideCircle(gridX, gridY)) {
+            displacement = getHeight(gridX, gridY);
+            
+            // Apply gain
+            displacement *= audioGain;
+            
+            // Add sample to recording buffer
+            audioManager.addSample(displacement);
+        }
+    }
 }
 
 } // namespace drumforge
