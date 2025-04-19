@@ -3,6 +3,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <algorithm>
+#include <cmath>
 
 namespace drumforge {
 
@@ -13,7 +14,9 @@ AudioManager::AudioManager()
     : sampleRate(44100)
     , isRecording(false)
     , accumulatedTime(0.0)
-    , sampleInterval(0.0) {
+    , sampleInterval(0.0)
+    , useChannelMixing(true)
+    , masterGain(1.0f) {
     // Initialize interpolation state
     interpolationState.lastValue = 0.0f;
     interpolationState.currentValue = 0.0f;
@@ -34,11 +37,118 @@ void AudioManager::initialize(int sampleRate) {
     sampleInterval = 1.0 / sampleRate;
     clearRecordBuffer();
     
+    // Clear all channels too
+    channels.clear();
+
     // Reset time tracking
     accumulatedTime = 0.0;
     
     std::cout << "AudioManager initialized with sample rate: " << sampleRate << " Hz" << std::endl;
     std::cout << "Sample interval: " << sampleInterval << " seconds" << std::endl;
+}
+
+// Add channel
+int AudioManager::addChannel(const std::string& name, float gain) {
+    AudioChannel channel;
+    channel.name = name;
+    channel.gain = gain;
+    channel.enabled = true;
+    channel.currentValue = 0.0f;
+    
+    channels.push_back(channel);
+    std::cout << "Added audio channel '" << name << "' with gain " << gain << std::endl;
+    
+    return channels.size() - 1;
+}
+
+// Remove channel
+void AudioManager::removeChannel(int channelIndex) {
+    if (channelIndex >= 0 && channelIndex < static_cast<int>(channels.size())) {
+        std::cout << "Removed audio channel '" << channels[channelIndex].name << "'" << std::endl;
+        channels.erase(channels.begin() + channelIndex);
+    }
+}
+
+// Set channel gain
+void AudioManager::setChannelGain(int channelIndex, float gain) {
+    if (channelIndex >= 0 && channelIndex < static_cast<int>(channels.size())) {
+        channels[channelIndex].gain = gain;
+    }
+}
+
+// Set channel enabled state
+void AudioManager::setChannelEnabled(int channelIndex, bool enabled) {
+    if (channelIndex >= 0 && channelIndex < static_cast<int>(channels.size())) {
+        channels[channelIndex].enabled = enabled;
+    }
+}
+
+// Set channel name
+void AudioManager::setChannelName(int channelIndex, const std::string& name) {
+    if (channelIndex >= 0 && channelIndex < static_cast<int>(channels.size())) {
+        channels[channelIndex].name = name;
+    }
+}
+
+// Get channel
+const AudioManager::AudioChannel& AudioManager::getChannel(int channelIndex) const {
+    static const AudioChannel defaultChannel = {"Invalid", 1.0f, false, 0.0f};
+    
+    if (channelIndex >= 0 && channelIndex < static_cast<int>(channels.size())) {
+        return channels[channelIndex];
+    }
+    return defaultChannel;
+}
+
+// Process audio for a specific channel
+void AudioManager::processAudioStepForChannel(float simulationTimeStep, float currentSampleValue, int channelIndex) {
+    if (!isRecording || channelIndex < 0 || channelIndex >= static_cast<int>(channels.size())) {
+        return;
+    }
+    
+    // Just update the channel's current value, don't process audio yet
+    channels[channelIndex].currentValue = currentSampleValue;
+    
+    // If we're mixing, we don't generate samples yet - that will be done in a separate step
+    if (useChannelMixing) {
+        return;
+    }
+    
+    // If not mixing channels, immediately process this sample
+    if (channels[channelIndex].enabled) {
+        // Scale the sample by the channel's gain
+        float scaledSample = currentSampleValue * channels[channelIndex].gain;
+        
+        // Pass to the sample processor
+        processAudioStep(simulationTimeStep, scaledSample);
+    }
+}
+
+void AudioManager::processMixedAudioStep(float simulationTimeStep) {
+    if (!isRecording || channels.empty() || !useChannelMixing) {
+        return;
+    }
+    
+    // Calculate mixed sample
+    float mixedSample = 0.0f;
+    int activeChannels = 0;
+    
+    for (const auto& channel : channels) {
+        if (channel.enabled) {
+            mixedSample += channel.currentValue * channel.gain;
+            activeChannels++;
+        }
+    }
+    
+    // Normalize by number of active channels and apply master gain
+    if (activeChannels > 0) {
+        // Use a sqrt scaling to preserve energy better when mixing
+        mixedSample /= sqrt(static_cast<float>(activeChannels));
+        mixedSample *= masterGain;
+        
+        // Process the mixed sample
+        processAudioStep(simulationTimeStep, mixedSample);
+    }
 }
 
 void AudioManager::startRecording() {

@@ -3,6 +3,7 @@
 
 #include <string>
 #include <memory>
+#include <vector>  // Added for std::vector
 #include <glm/glm.hpp>
 
 namespace drumforge {
@@ -88,6 +89,15 @@ public:
      * @param visManager Reference to the visualization manager
      */
     virtual void visualize(VisualizationManager& visManager) {}
+
+    // Audio-related methods
+    virtual void initializeAudioChannels() {}
+    virtual void updateAudio(float timestep) {}
+    virtual bool hasAudio() const { return false; }
+
+protected:
+    std::vector<int> audioChannelIndices;  // Indices of channels registered with AudioManager
+    bool audioChannelsInitialized = false;  // Flag to track if we've registered channels
 };
 
 } // namespace drumforge

@@ -555,6 +555,29 @@ void MembraneComponent::setDamping(float newDamping) {
     std::cout << "Membrane damping updated to " << damping << std::endl;
 }
 
+void MembraneComponent::initializeAudioChannels() {
+    // Get reference to AudioManager
+    AudioManager& audioManager = AudioManager::getInstance();
+    
+    // Clear any existing channels
+    for (int channelIdx : audioChannelIndices) {
+        audioManager.removeChannel(channelIdx);
+    }
+    audioChannelIndices.clear();
+    
+    // Register a channel for each microphone
+    for (int i = 0; i < static_cast<int>(microphones.size()); ++i) {
+        const auto& mic = microphones[i];
+        int channelIdx = audioManager.addChannel(
+            name + " - " + mic.name,  // Use component name + mic name
+            mic.gain                  // Use mic gain as initial channel gain
+        );
+        audioChannelIndices.push_back(channelIdx);
+    }
+    
+    audioChannelsInitialized = true;
+}
+
 void MembraneComponent::setAudioSamplePoint(float x, float y) {
     // Clamp to [0,1] range
     audioSamplePoint.x = std::max(0.0f, std::min(x, 1.0f));
@@ -567,24 +590,42 @@ void MembraneComponent::setAudioGain(float gain) {
 }
 
 void MembraneComponent::updateAudio(float timestep) {
-    timestep *= 1.0f/60.0f;
     // Get reference to AudioManager
     AudioManager& audioManager = AudioManager::getInstance();
     
     // Only sample if recording is active
-    if (!audioManager.getIsRecording() || microphones.empty()) {
+    if (!audioManager.getIsRecording()) {
         return;
     }
+    
+    // Initialize audio channels if needed
+    if (!audioChannelsInitialized || audioChannelIndices.empty()) {
+        initializeAudioChannels();
+    }
+    
+    // Scale timestep for audio processing (same as before)
+    float audioTimestep = timestep * (1.0f/60.0f);
     
     // Get height field for efficient sampling
     const std::vector<float>& heights = getHeights();
     
-    // Process all enabled microphones
-    float mixedSignal = 0.0f;
-    int activeMicCount = 0;
-    
-    for (const auto& mic : microphones) {
-        if (!mic.enabled) continue;
+    // Process all microphones
+    for (int i = 0; i < static_cast<int>(microphones.size()); ++i) {
+        // Skip if we don't have a corresponding audio channel
+        if (i >= static_cast<int>(audioChannelIndices.size())) {
+            continue;
+        }
+        
+        const auto& mic = microphones[i];
+        int channelIdx = audioChannelIndices[i];
+        
+        // Update channel enabled state to match microphone
+        audioManager.setChannelEnabled(channelIdx, mic.enabled);
+        
+        // Skip disabled microphones
+        if (!mic.enabled) {
+            continue;
+        }
         
         // Convert normalized coordinates to grid coordinates
         int gridX = static_cast<int>(mic.position.x * membraneWidth);
@@ -598,38 +639,12 @@ void MembraneComponent::updateAudio(float timestep) {
         float displacement = 0.0f;
         if (isInsideCircle(gridX, gridY)) {
             int idx = gridY * membraneWidth + gridX;
-            displacement = heights[idx] * mic.gain;
+            // Apply microphone gain and master gain
+            displacement = heights[idx] * mic.gain * masterGain;
             
-            if (useMixedOutput) {
-                // Add to mixed signal
-                mixedSignal += displacement;
-                activeMicCount++;
-            }
-            else {
-                // If not mixing, process each microphone separately
-                // Note: The AudioManager would need to be modified to handle multiple inputs
-                // For now, we'll just use the first active microphone
-                audioManager.processAudioStep(timestep, displacement * masterGain);
-                return;
-            }
+            // Process this microphone's audio
+            audioManager.processAudioStepForChannel(audioTimestep, displacement, channelIdx);
         }
-    }
-    
-    // Apply mixing and master gain
-    if (useMixedOutput && activeMicCount > 0) {
-        // Instead of simple averaging, use a weighted sum approach
-        // This preserves more signal energy when using multiple microphones
-        // We scale by sqrt(activeMicCount) instead of activeMicCount for better energy preservation
-        mixedSignal /= sqrt(static_cast<float>(activeMicCount));
-        
-        // Apply master gain with a much higher range
-        mixedSignal *= masterGain;
-        
-        // Apply additional boost for multi-mic setups (compensates for phase cancellations)
-        mixedSignal *= 2.0f;
-        
-        // Process the mixed signal
-        audioManager.processAudioStep(timestep, mixedSignal);
     }
 }
 
@@ -650,7 +665,9 @@ int MembraneComponent::addMicrophone(float x, float y, float gain, const std::st
     
     std::cout << "Added microphone '" << mic.name << "' at position (" 
               << x << ", " << y << ") with gain " << gain << std::endl;
-              
+
+    audioChannelsInitialized = false;
+
     return microphones.size() - 1; // Return index of the new microphone
 }
 
@@ -658,12 +675,14 @@ void MembraneComponent::removeMicrophone(int index) {
     if (index >= 0 && index < static_cast<int>(microphones.size())) {
         std::cout << "Removed microphone '" << microphones[index].name << "'" << std::endl;
         microphones.erase(microphones.begin() + index);
+        audioChannelsInitialized = false;
     }
 }
 
 void MembraneComponent::clearAllMicrophones() {
     microphones.clear();
     std::cout << "All microphones removed" << std::endl;
+    audioChannelsInitialized = false;
 }
 
 const MembraneVirtualMicrophone& MembraneComponent::getMicrophone(int index) const {
@@ -684,18 +703,21 @@ void MembraneComponent::setMicrophonePosition(int index, float x, float y) {
         y = std::max(0.0f, std::min(y, 1.0f));
         
         microphones[index].position = glm::vec2(x, y);
+        audioChannelsInitialized = false;
     }
 }
 
 void MembraneComponent::setMicrophoneGain(int index, float gain) {
     if (index >= 0 && index < static_cast<int>(microphones.size())) {
         microphones[index].gain = gain;
+        audioChannelsInitialized = false;
     }
 }
 
 void MembraneComponent::enableMicrophone(int index, bool enabled) {
     if (index >= 0 && index < static_cast<int>(microphones.size())) {
         microphones[index].enabled = enabled;
+        audioChannelsInitialized = false;
     }
 }
 
@@ -703,12 +725,14 @@ void MembraneComponent::enableMicrophone(int index, bool enabled) {
 void MembraneComponent::setupSingleCenterMicrophone() {
     clearAllMicrophones();
     addMicrophone(0.5f, 0.5f, 1.0f, "Center");
+    audioChannelsInitialized = false;
 }
 
 void MembraneComponent::setupStereoMicrophones() {
     clearAllMicrophones();
     addMicrophone(0.3f, 0.5f, 1.0f, "Left");
     addMicrophone(0.7f, 0.5f, 1.0f, "Right");
+    audioChannelsInitialized = false;
 }
 
 void MembraneComponent::setupQuadMicrophones() {
@@ -717,6 +741,7 @@ void MembraneComponent::setupQuadMicrophones() {
     addMicrophone(0.7f, 0.3f, 1.0f, "Top Right");
     addMicrophone(0.3f, 0.7f, 1.0f, "Bottom Left");
     addMicrophone(0.7f, 0.7f, 1.0f, "Bottom Right");
+    audioChannelsInitialized = false;
 }
 
 void MembraneComponent::setupCircularMicrophones(int count, float radius) {
@@ -736,6 +761,7 @@ void MembraneComponent::setupCircularMicrophones(int count, float radius) {
         
         addMicrophone(x, y, 1.0f, "Circular " + std::to_string(i+1));
     }
+    audioChannelsInitialized = false;
 }
 
 } // namespace drumforge

@@ -35,6 +35,17 @@ private:
         double lastSampleTime; // Time of last actual sample
     } interpolationState;
     
+    struct AudioChannel {
+        std::string name;         // Channel name (e.g., "Upper Membrane", "Body", etc.)
+        float gain;               // Channel-specific gain
+        bool enabled;             // Whether this channel is active
+        float currentValue;       // Last received value for this channel
+    };
+
+    std::vector<AudioChannel> channels;      // All registered audio channels
+    bool useChannelMixing;                   // Whether to mix all channels (true) or use discrete channels (false)
+    float masterGain;                        // Global gain applied to all channels
+
     // Private constructor for singleton
     AudioManager();
     
@@ -80,6 +91,25 @@ public:
     void processAudioStep(float simulationTimeStep, float currentSampleValue);
 
     float getInterpolatedSample(double time);
+
+    int addChannel(const std::string& name, float gain = 1.0f);
+    void removeChannel(int channelIndex);
+    void setChannelGain(int channelIndex, float gain);
+    void setChannelEnabled(int channelIndex, bool enabled);
+    void setChannelName(int channelIndex, const std::string& name);
+    int getChannelCount() const { return static_cast<int>(channels.size()); }
+    const AudioChannel& getChannel(int channelIndex) const;
+
+    // Channel data updating
+    void processAudioStepForChannel(float simulationTimeStep, float currentSampleValue, int channelIndex);
+
+    // Mixing settings
+    void setUseChannelMixing(bool useMixing) { useChannelMixing = useMixing; }
+    bool getUseChannelMixing() const { return useChannelMixing; }
+    void setMasterGain(float gain) { masterGain = gain; }
+    float getMasterGain() const { return masterGain; }
+
+    void processMixedAudioStep(float simulationTimeStep);
 };
 
 } // namespace drumforge

@@ -158,7 +158,11 @@ public:
     // Legacy audio methods (deprecated)
     void setAudioSamplePoint(float x, float y);
     void setAudioGain(float gain);
-    void updateAudio(float timestep);
+    // void updateAudio(float timestep);
+
+    void initializeAudioChannels() override;
+    void updateAudio(float timestep) override;
+    bool hasAudio() const override { return true; }
     
     // Microphone management
     int addMicrophone(float x, float y, float gain = 1.0f, const std::string& name = "");
