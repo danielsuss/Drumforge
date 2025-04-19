@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
+#include "audio_manager.h"
 
 namespace drumforge {
 
@@ -96,6 +97,16 @@ void SimulationManager::advance(float deltaTime) {
             CouplingData data = coupling.source->getInterfaceData();
             coupling.target->setCouplingData(data);
         }
+        
+        // Update audio channel values for all components (but don't process audio yet)
+        for (auto& component : components) {
+            if (component->hasAudio()) {
+                component->updateAudio(stableTimestep);
+            }
+        }
+        
+        // Process audio once per simulation step - either mixed or individual channels
+        AudioManager& audioManager = AudioManager::getInstance();
         
         // Update simulation time
         currentTime += stableTimestep;

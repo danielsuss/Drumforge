@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
         std::shared_ptr<drumforge::MembraneComponent> membrane = nullptr;
         
         // Fixed timestep for simulation
-        const float timestep = 1.0f / 1.0f;  // ~60 FPS
+        const float timestep = 1.0f / 1.1f;  // ~60 FPS
         bool simulationInitialized = false;
         
         // Main loop
