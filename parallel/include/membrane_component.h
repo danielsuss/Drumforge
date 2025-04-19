@@ -18,6 +18,16 @@ struct MembraneKernelParams;
 class VisualizationManager;
 
 /**
+ * Structure representing a virtual microphone on the membrane
+ */
+struct MembraneVirtualMicrophone {
+    glm::vec2 position;   // Normalized position [0,1] on the membrane
+    float gain;           // Microphone gain factor
+    bool enabled;         // Whether the microphone is active
+    std::string name;     // Optional name for the microphone (useful for UI)
+};
+
+/**
  * MembraneComponent simulates a circular drum membrane using CUDA-accelerated
  * finite difference time domain (FDTD) methods to solve the 2D wave equation.
  */
@@ -72,13 +82,18 @@ private:
     };
     ImpulseParams pendingImpulse;
 
+    // Audio sampling point (legacy - replaced by microphones)
+    glm::vec2 audioSamplePoint;
+    float audioGain;
+
+    // Virtual microphones for audio output
+    std::vector<MembraneVirtualMicrophone> microphones;
+    float masterGain;         // Master gain applied to the final mix
+    bool useMixedOutput;      // Whether to mix all microphones or use them separately
+
     // Private utility methods
     void updateBoundaryConditions();
     float calculateWaveSpeed() const;
-
-    // Audio sampling point
-    glm::vec2 audioSamplePoint;
-    float audioGain;
 
 public:
     // Constructor
@@ -140,10 +155,30 @@ public:
     // Check if a point is inside the circular membrane
     bool isInsideCircle(int x, int y) const;
 
-    // Audio methods
+    // Legacy audio methods (deprecated)
     void setAudioSamplePoint(float x, float y);
     void setAudioGain(float gain);
     void updateAudio(float timestep);
+    
+    // Microphone management
+    int addMicrophone(float x, float y, float gain = 1.0f, const std::string& name = "");
+    void removeMicrophone(int index);
+    void clearAllMicrophones();
+    int getMicrophoneCount() const { return static_cast<int>(microphones.size()); }
+    const MembraneVirtualMicrophone& getMicrophone(int index) const;
+    void setMicrophonePosition(int index, float x, float y);
+    void setMicrophoneGain(int index, float gain);
+    void enableMicrophone(int index, bool enabled);
+    void setMasterGain(float gain) { masterGain = gain; }
+    float getMasterGain() const { return masterGain; }
+    void setUseMixedOutput(bool useMixed) { useMixedOutput = useMixed; }
+    bool getUseMixedOutput() const { return useMixedOutput; }
+    
+    // Microphone configuration presets
+    void setupSingleCenterMicrophone();
+    void setupStereoMicrophones();
+    void setupQuadMicrophones();
+    void setupCircularMicrophones(int count, float radius = 0.4f);
 };
 
 } // namespace drumforge

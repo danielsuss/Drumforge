@@ -195,7 +195,7 @@ void GUIManager::renderMainMenu() {
     // Membrane Controls
     ImGui::SliderFloat("Membrane Radius", &configState.radius, 1.0f, 10.0f, "%.1f");
     
-    ImGui::SliderFloat("Tension", &configState.tension, 10.0f, 250.0f, "%.0f");
+    ImGui::SliderFloat("Tension", &configState.tension, 10.0f, 1000.0f, "%.0f");
     
     ImGui::SliderFloat("Damping", &configState.damping, 0.001f, 0.1f, "%.3f", ImGuiSliderFlags_Logarithmic);
     
@@ -257,7 +257,7 @@ void GUIManager::renderSimulationGUI(SimulationManager& simManager, std::shared_
     ImGui::Separator();
     
     // Tension control
-    ImGui::SliderFloat("Tension", &runtimeState.tension, 10.0f, 250.0f, "%.0f");
+    ImGui::SliderFloat("Tension", &runtimeState.tension, 10.0f, 1000.0f, "%.0f");
     
     // Damping control
     ImGui::SliderFloat("Damping", &runtimeState.damping, 0.001f, 0.1f, "%.3f", ImGuiSliderFlags_Logarithmic);
@@ -304,6 +304,159 @@ void GUIManager::renderSimulationGUI(SimulationManager& simManager, std::shared_
                    membrane->getMembraneWidth(),
                    membrane->getMembraneHeight());
         ImGui::Text("Stable Timestep: %.6f", membrane->calculateStableTimestep());
+    }
+
+    // Add this code to the renderSimulationGUI method in gui_manager.cpp
+// Place it after the existing membrane controls section but before the audio recording section
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.0f, 0.8f, 1.0f, 1.0f), "Microphone Configuration");
+    
+    if (membrane) {
+        // Master gain control
+        float masterGain = membrane->getMasterGain();
+        if (ImGui::SliderFloat("Master Gain", &masterGain, 0.1f, 20.0f, "%.2f")) {
+            membrane->setMasterGain(masterGain);
+        }
+        
+        // Mixed output toggle
+        bool useMixedOutput = membrane->getUseMixedOutput();
+        if (ImGui::Checkbox("Mix All Microphones", &useMixedOutput)) {
+            membrane->setUseMixedOutput(useMixedOutput);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("When enabled, all microphone signals are mixed together.\nWhen disabled, only the first active microphone is used.");
+        }
+        
+        // Microphone presets
+        if (ImGui::TreeNode("Microphone Presets")) {
+            if (ImGui::Button("Single Center")) {
+                membrane->setupSingleCenterMicrophone();
+            }
+            
+            ImGui::SameLine();
+            if (ImGui::Button("Stereo")) {
+                membrane->setupStereoMicrophones();
+            }
+            
+            ImGui::SameLine();
+            if (ImGui::Button("Quad")) {
+                membrane->setupQuadMicrophones();
+            }
+            
+            // Circular arrangement with count control
+            static int micCount = 8;
+            static float circleRadius = 0.4f;
+            
+            ImGui::PushItemWidth(60);
+            ImGui::InputInt("Count", &micCount, 1, 2);
+            micCount = std::max(3, std::min(micCount, 16)); // Limit to sensible range
+            ImGui::SameLine();
+            
+            ImGui::PushItemWidth(60);
+            ImGui::SliderFloat("Radius", &circleRadius, 0.1f, 0.49f, "%.2f");
+            ImGui::SameLine();
+            
+            if (ImGui::Button("Circular")) {
+                membrane->setupCircularMicrophones(micCount, circleRadius);
+            }
+            
+            ImGui::TreePop();
+        }
+        
+        // Individual microphone controls
+        if (ImGui::TreeNode("Microphones")) {
+            int micCount = membrane->getMicrophoneCount();
+            
+            // Add new microphone button
+            if (ImGui::Button("Add Microphone")) {
+                membrane->addMicrophone(0.5f, 0.5f, 1.0f);
+            }
+            
+            ImGui::SameLine();
+            if (ImGui::Button("Clear All")) {
+                membrane->clearAllMicrophones();
+            }
+            
+            // List all microphones with their properties
+            for (int i = 0; i < micCount; i++) {
+                const auto& mic = membrane->getMicrophone(i);
+                
+                // Create a unique ID for each set of widgets
+                ImGui::PushID(i);
+                
+                bool opened = ImGui::TreeNode((void*)(intptr_t)i, "Microphone %d: %s", i + 1, mic.name.c_str());
+                
+                // Quick controls on the same line as the tree node
+                ImGui::SameLine(ImGui::GetWindowWidth() - 120);
+                
+                // Enable/disable toggle
+                bool enabled = mic.enabled;
+                if (ImGui::Checkbox("##Enabled", &enabled)) {
+                    membrane->enableMicrophone(i, enabled);
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Enable/Disable microphone");
+                }
+                
+                ImGui::SameLine();
+                
+                // Remove button
+                if (ImGui::Button("X")) {
+                    membrane->removeMicrophone(i);
+                    ImGui::PopID();
+                    if (opened) ImGui::TreePop();
+                    continue; // Skip the rest for this removed microphone
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Remove microphone");
+                }
+                
+                if (opened) {
+                    // Position control
+                    glm::vec2 position = mic.position;
+                    float pos[2] = { position.x, position.y };
+                    
+                    if (ImGui::SliderFloat2("Position", pos, 0.0f, 1.0f, "%.2f")) {
+                        membrane->setMicrophonePosition(i, pos[0], pos[1]);
+                    }
+                    
+                    // Gain control
+                    float gain = mic.gain;
+                    if (ImGui::SliderFloat("Gain", &gain, 0.0f, 2.0f, "%.2f")) {
+                        membrane->setMicrophoneGain(i, gain);
+                    }
+                    
+                    // Visualization of position on a grid
+                    ImGui::Text("Position Preview:");
+                    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+                    ImVec2 canvasSize(100, 100);
+                    ImGui::InvisibleButton("canvas", canvasSize);
+                    ImDrawList* drawList = ImGui::GetWindowDrawList();
+                    
+                    // Draw membrane outline
+                    ImVec2 center(canvasPos.x + canvasSize.x * 0.5f, canvasPos.y + canvasSize.y * 0.5f);
+                    drawList->AddCircle(center, canvasSize.x * 0.48f, ImColor(150, 150, 150, 255), 0, 2.0f);
+                    
+                    // Draw microphone position
+                    ImVec2 micPos(
+                        canvasPos.x + canvasSize.x * pos[0],
+                        canvasPos.y + canvasSize.y * pos[1]
+                    );
+                    drawList->AddCircleFilled(micPos, 4.0f, ImColor(255, 50, 50, 255));
+                    
+                    ImGui::TreePop();
+                }
+                
+                ImGui::PopID();
+            }
+            
+            ImGui::TreePop();
+        }
+    }
+    else {
+        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "No membrane component available");
     }
 
     ImGui::Spacing();
