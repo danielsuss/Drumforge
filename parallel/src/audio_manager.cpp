@@ -90,6 +90,12 @@ void AudioManager::setChannelName(int channelIndex, const std::string& name) {
     }
 }
 
+void AudioManager::setChannelValue(int channelIndex, float value) {
+    if (channelIndex >= 0 && channelIndex < static_cast<int>(channels.size())) {
+        channels[channelIndex].currentValue = value;
+    }
+}
+
 // Get channel
 const AudioManager::AudioChannel& AudioManager::getChannel(int channelIndex) const {
     static const AudioChannel defaultChannel = {"Invalid", 1.0f, false, 0.0f};

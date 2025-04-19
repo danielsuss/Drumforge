@@ -98,18 +98,15 @@ void SimulationManager::advance(float deltaTime) {
             coupling.target->setCouplingData(data);
         }
         
-        // Update audio for all components - this will only update channel values
+        // Update audio channel values for all components (but don't process audio yet)
         for (auto& component : components) {
             if (component->hasAudio()) {
                 component->updateAudio(stableTimestep);
             }
         }
         
-        // Process mixed audio once per simulation step
+        // Process audio once per simulation step - either mixed or individual channels
         AudioManager& audioManager = AudioManager::getInstance();
-        if (audioManager.getIsRecording() && audioManager.getUseChannelMixing()) {
-            audioManager.processMixedAudioStep(stableTimestep);
-        }
         
         // Update simulation time
         currentTime += stableTimestep;

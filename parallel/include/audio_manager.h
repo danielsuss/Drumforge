@@ -97,6 +97,7 @@ public:
     void setChannelGain(int channelIndex, float gain);
     void setChannelEnabled(int channelIndex, bool enabled);
     void setChannelName(int channelIndex, const std::string& name);
+    void setChannelValue(int channelIndex, float value);
     int getChannelCount() const { return static_cast<int>(channels.size()); }
     const AudioChannel& getChannel(int channelIndex) const;
 
