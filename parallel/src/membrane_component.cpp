@@ -287,8 +287,33 @@ void MembraneComponent::prepareForVisualization() {
 }
 
 CouplingData MembraneComponent::getInterfaceData() {
-    // For now, return an empty struct. This will be expanded when we implement coupling.
-    return CouplingData();
+    // Create a coupling data structure for other components
+    CouplingData data;
+    
+    // Get the current height field for coupling
+    const auto& heights = getHeights();
+    
+    // Set up the data for body coupling
+    data.type = CouplingData::Type::MEMBRANE_TO_BODY;
+    data.displacements = heights;  // Copy the entire height field
+    
+    // Include velocities data if available
+    std::vector<float> velocities(membraneWidth * membraneHeight, 0.0f);
+    d_velocities->copyToHost(velocities.data());
+    data.velocities = velocities;
+    
+    // Include energy of any recent strike
+    if (pendingImpulse.active) {
+        data.impactEnergy = pendingImpulse.strength;
+        data.impactPosition = glm::vec2(pendingImpulse.x, pendingImpulse.y);
+    }
+    
+    // Add grid information for proper spatial mapping
+    data.width = membraneWidth;
+    data.height = membraneHeight;
+    data.cellSize = cellSize;
+    
+    return data;
 }
 
 void MembraneComponent::setCouplingData(const CouplingData& data) {

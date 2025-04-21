@@ -1,6 +1,7 @@
 #include "cuda_memory_manager.h"
 #include "simulation_manager.h"
 #include "membrane_component.h"
+#include "body_component.h"  // Added include for body component
 #include "visualization_manager.h"
 #include "input_handler.h"
 #include "gui_manager.h"
@@ -78,8 +79,9 @@ int main(int argc, char* argv[]) {
         drumforge::GUIManager& guiManager = drumforge::GUIManager::getInstance();
         guiManager.initialize(visManager.getWindow());
         
-        // Create a shared pointer for the membrane component (will initialize later)
+        // Create shared pointers for components (will initialize later)
         std::shared_ptr<drumforge::MembraneComponent> membrane = nullptr;
+        std::shared_ptr<drumforge::BodyComponent> body = nullptr;  // Added body component
         
         // Fixed timestep for simulation
         const float timestep = 1.0f / 1.1f;  // ~60 FPS
@@ -145,13 +147,32 @@ int main(int argc, char* argv[]) {
                     membraneDamping   // Damping
                 );
                 
-                // Add membrane to simulation
+                // Create the body component with matching radius
+                std::cout << "Creating body component..." << std::endl;
+                body = std::make_shared<drumforge::BodyComponent>(
+                    "DrumShell",
+                    membraneRadius,    // Same radius as membrane
+                    membraneRadius * 2.0f,  // Default height twice the radius
+                    membraneRadius * 0.05f, // Default thickness 5% of radius
+                    "Maple"            // Default material
+                );
+                
+                // Add components to simulation
                 simManager.addComponent(membrane);
+                simManager.addComponent(body);
+                
+                // Set up coupling between membrane and body
+                simManager.setupCoupling(membrane, body);
                 
                 // Initialize the membrane component
                 membrane->initialize();
                 CHECK_CUDA_ERRORS();
                 std::cout << "Membrane component initialized successfully" << std::endl;
+                
+                // Initialize the body component
+                body->initialize();
+                CHECK_CUDA_ERRORS();
+                std::cout << "Body component initialized successfully" << std::endl;
                 
                 // Connect the membrane to the input handler for click interaction
                 if (inputHandler) {
@@ -180,7 +201,7 @@ int main(int argc, char* argv[]) {
             }
             
             // Render GUI (this handles rendering the appropriate UI based on state)
-            guiManager.renderGUI(simManager, membrane);
+            guiManager.renderGUI(simManager, membrane, body);  // Updated to pass body component
             guiManager.renderFrame();
             
             // Finish frame

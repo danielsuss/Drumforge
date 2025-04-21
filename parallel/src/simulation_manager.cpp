@@ -105,8 +105,11 @@ void SimulationManager::advance(float deltaTime) {
             }
         }
         
-        // Process audio once per simulation step - either mixed or individual channels
+        // Process audio once per simulation step
         AudioManager& audioManager = AudioManager::getInstance();
+        if (audioManager.getIsRecording() && audioManager.getUseChannelMixing()) {
+            audioManager.processMixedAudioStep(stableTimestep);
+        }
         
         // Update simulation time
         currentTime += stableTimestep;

@@ -3,7 +3,7 @@
 
 #include <string>
 #include <memory>
-#include <vector>  // Added for std::vector
+#include <vector>
 #include <glm/glm.hpp>
 
 namespace drumforge {
@@ -15,8 +15,43 @@ class VisualizationManager;
 
 // Structure to hold coupling data for interaction between components
 struct CouplingData {
-    // This will be expanded as we implement component interactions
-    // Could include forces, pressures, displacements, etc.
+    // Coupling type to identify the direction/type of data
+    enum class Type {
+        NONE,             // No coupling data
+        MEMBRANE_TO_AIR,  // Membrane displacement data for air cavity
+        AIR_TO_MEMBRANE,  // Air pressure data for membrane
+        MEMBRANE_TO_BODY, // Membrane vibration data for body
+        BODY_TO_MEMBRANE  // Body feedback for membrane (optional)
+    };
+    
+    Type type = Type::NONE;
+    
+    // For membrane to body coupling
+    std::vector<float> displacements;  // Height field
+    std::vector<float> velocities;     // Velocity field
+    float impactEnergy = 0.0f;         // Energy of impact for exciting body modes
+    glm::vec2 impactPosition{0.5f, 0.5f}; // Normalized position of impact [0,1]
+    
+    // For body to membrane coupling (feedback)
+    std::vector<float> bodyFeedback;   // Body's influence on membrane
+    
+    // Grid info for coupling
+    int width = 0;
+    int height = 0;
+    float cellSize = 0.0f;
+    
+    // Clear function to reset the coupling data
+    void clear() {
+        type = Type::NONE;
+        displacements.clear();
+        velocities.clear();
+        impactEnergy = 0.0f;
+        impactPosition = glm::vec2(0.5f, 0.5f);
+        bodyFeedback.clear();
+        width = 0;
+        height = 0;
+        cellSize = 0.0f;
+    }
 };
 
 /**

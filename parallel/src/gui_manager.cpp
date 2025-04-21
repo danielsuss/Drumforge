@@ -39,6 +39,12 @@ GUIManager::GUIManager()
     runtimeState.tension = 100.0f;
     runtimeState.damping = 0.01f;
     runtimeState.showDebugInfo = false;
+    
+    // Initialize body parameters
+    runtimeState.bodyMaterial = "Maple";
+    runtimeState.bodyHeight = 10.0f;
+    runtimeState.bodyThickness = 0.5f;
+    runtimeState.bodyMasterGain = 1.0f;
 }
 
 GUIManager::~GUIManager() {
@@ -127,7 +133,9 @@ void GUIManager::renderFrame() {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-void GUIManager::renderGUI(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane) {
+void GUIManager::renderGUI(SimulationManager& simManager, 
+                          std::shared_ptr<MembraneComponent> membrane,
+                          std::shared_ptr<BodyComponent> body) {
     if (!initialized) {
         return;
     }
@@ -139,7 +147,7 @@ void GUIManager::renderGUI(SimulationManager& simManager, std::shared_ptr<Membra
             break;
             
         case AppState::SIMULATION:
-            renderSimulationGUI(simManager, membrane);
+            renderSimulationGUI(simManager, membrane, body);
             break;
     }
 }
@@ -228,7 +236,9 @@ void GUIManager::renderMainMenu() {
     ImGui::End();
 }
 
-void GUIManager::renderSimulationGUI(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane) {
+void GUIManager::renderSimulationGUI(SimulationManager& simManager, 
+                                    std::shared_ptr<MembraneComponent> membrane,
+                                    std::shared_ptr<BodyComponent> body) {
     // Sync runtime state with current simulation parameters on first run
     static bool firstRunInSimulation = true;
     if (firstRunInSimulation) {
@@ -285,7 +295,7 @@ void GUIManager::renderSimulationGUI(SimulationManager& simManager, std::shared_
     // Apply button
     ImGui::SameLine();
     if (ImGui::Button("Apply Changes")) {
-        applyRuntimeChanges(simManager, membrane);
+        applyRuntimeChanges(simManager, membrane, body);
     }
     
     ImGui::Spacing();
@@ -459,6 +469,202 @@ void GUIManager::renderSimulationGUI(SimulationManager& simManager, std::shared_
         ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "No membrane component available");
     }
 
+    if (body) {
+        // Create separate window for body controls
+        ImGui::SetNextWindowPos(ImVec2(10, 400), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(300, 380), ImGuiCond_FirstUseEver);
+        ImGui::Begin("Body Resonator Controls");
+        
+        // Title and brief state info
+        ImGui::TextColored(ImVec4(0.7f, 0.4f, 0.2f, 1.0f), "Drum Body Properties");
+        ImGui::Separator();
+        
+        // Material selection
+        const char* materials[] = { "Maple", "Birch", "Mahogany", "Metal", "Acrylic" };
+        static int materialIndex = 0;
+        
+        // Find index of current material
+        for (int i = 0; i < IM_ARRAYSIZE(materials); i++) {
+            if (runtimeState.bodyMaterial == materials[i]) {
+                materialIndex = i;
+                break;
+            }
+        }
+        
+        if (ImGui::Combo("Material", &materialIndex, materials, IM_ARRAYSIZE(materials))) {
+            runtimeState.bodyMaterial = materials[materialIndex];
+        }
+        
+        // Dimension controls
+        float bodyHeight = body->getHeight();
+        if (ImGui::SliderFloat("Height", &bodyHeight, body->getRadius() * 0.5f, body->getRadius() * 4.0f, "%.1f")) {
+            runtimeState.bodyHeight = bodyHeight;
+        }
+        
+        float bodyThickness = body->getThickness();
+        if (ImGui::SliderFloat("Thickness", &bodyThickness, body->getRadius() * 0.01f, body->getRadius() * 0.2f, "%.3f")) {
+            runtimeState.bodyThickness = bodyThickness;
+        }
+        
+        // Master gain
+        float bodyMasterGain = body->getMasterGain();
+        if (ImGui::SliderFloat("Master Gain", &bodyMasterGain, 0.1f, 5.0f, "%.2f")) {
+            runtimeState.bodyMasterGain = bodyMasterGain;
+        }
+        
+        // Microphone controls section
+        if (ImGui::TreeNode("Body Microphones")) {
+            int micCount = body->getMicrophoneCount();
+            
+            // Add new microphone button
+            if (ImGui::Button("Add Microphone")) {
+                body->addMicrophone(0.5f, 0.5f, 0.5f, 1.0f);
+            }
+            
+            ImGui::SameLine();
+            if (ImGui::Button("Clear All")) {
+                body->clearAllMicrophones();
+            }
+            
+            // Microphone presets
+            if (ImGui::Button("Default Setup")) {
+                body->setupDefaultMicrophones();
+            }
+            
+            // Mixed output toggle
+            bool useMixedOutput = body->getUseMixedOutput();
+            if (ImGui::Checkbox("Mix All Microphones", &useMixedOutput)) {
+                body->setUseMixedOutput(useMixedOutput);
+            }
+            
+            // List all microphones with their properties
+            for (int i = 0; i < micCount; i++) {
+                const auto& mic = body->getMicrophone(i);
+                
+                // Create a unique ID for each set of widgets
+                ImGui::PushID(i);
+                
+                bool opened = ImGui::TreeNode((void*)(intptr_t)i, "Microphone %d: %s", i + 1, mic.name.c_str());
+                
+                // Quick controls on the same line as the tree node
+                ImGui::SameLine(ImGui::GetWindowWidth() - 120);
+                
+                // Enable/disable toggle
+                bool enabled = mic.enabled;
+                if (ImGui::Checkbox("##Enabled", &enabled)) {
+                    body->enableMicrophone(i, enabled);
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Enable/Disable microphone");
+                }
+                
+                ImGui::SameLine();
+                
+                // Remove button
+                if (ImGui::Button("X")) {
+                    body->removeMicrophone(i);
+                    ImGui::PopID();
+                    if (opened) ImGui::TreePop();
+                    continue; // Skip the rest for this removed microphone
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Remove microphone");
+                }
+                
+                if (opened) {
+                    // Position controls
+                    glm::vec2 position = mic.position;
+                    float height = mic.height;
+                    float pos[3] = { position.x, position.y, height };
+                    
+                    if (ImGui::SliderFloat2("Position", pos, 0.0f, 1.0f, "%.2f")) {
+                        body->setMicrophonePosition(i, pos[0], pos[1], height);
+                    }
+                    
+                    if (ImGui::SliderFloat("Height", &pos[2], 0.0f, 1.0f, "%.2f")) {
+                        body->setMicrophonePosition(i, pos[0], pos[1], pos[2]);
+                    }
+                    
+                    // Gain control
+                    float gain = mic.gain;
+                    if (ImGui::SliderFloat("Gain", &gain, 0.0f, 2.0f, "%.2f")) {
+                        body->setMicrophoneGain(i, gain);
+                    }
+                    
+                    ImGui::TreePop();
+                }
+                
+                ImGui::PopID();
+            }
+            
+            ImGui::TreePop();
+        }
+        
+        // Modal information display
+        if (ImGui::TreeNode("Resonant Modes")) {
+            if (ImGui::Button("Test All Modes")) {
+                body->exciteMode(-1, 0.2f); // Excite all modes with moderate strength
+            }
+            
+            ImGui::SameLine();
+            
+            if (ImGui::Button("Reset")) {
+                body->reset();
+            }
+            
+            // Show mode information
+            int numModes = body->getNumModes();
+            
+            ImGui::Text("Number of modes: %d", numModes);
+            ImGui::Text("Material: %s", body->getMaterial().c_str());
+            
+            if (runtimeState.showDebugInfo) {
+                // Only show detailed mode info in debug mode
+                if (ImGui::TreeNode("Mode Details")) {
+                    const auto& modes = body->getModes();
+                    const auto& states = body->getModeStates();
+                    
+                    for (int i = 0; i < std::min(10, numModes); i++) { // Show only first 10 modes
+                        ImGui::PushID(i);
+                        if (ImGui::TreeNode((void*)(intptr_t)i, "Mode %d", i + 1)) {
+                            ImGui::Text("Frequency: %.1f Hz", modes[i].frequency);
+                            ImGui::Text("Amplitude: %.3f", modes[i].amplitude);
+                            ImGui::Text("Decay: %.3f s", modes[i].decay);
+                            
+                            // Current state
+                            float state = (i < states.size()) ? states[i] : 0.0f;
+                            ImGui::Text("Current State: %.5f", state);
+                            
+                            // Test this specific mode
+                            if (ImGui::Button("Excite")) {
+                                body->exciteMode(i, 0.5f);
+                            }
+                            
+                            ImGui::TreePop();
+                        }
+                        ImGui::PopID();
+                    }
+                    
+                    if (numModes > 10) {
+                        ImGui::Text("... %d more modes", numModes - 10);
+                    }
+                    
+                    ImGui::TreePop();
+                }
+            }
+            
+            ImGui::TreePop();
+        }
+        
+        // Apply button
+        ImGui::Spacing();
+        if (ImGui::Button("Apply Changes")) {
+            applyRuntimeChanges(simManager, membrane, body);
+        }
+        
+        ImGui::End();
+    }
+
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Audio Recording");
@@ -535,7 +741,9 @@ void GUIManager::renderSimulationGUI(SimulationManager& simManager, std::shared_
     ImGui::End();
 }
 
-void GUIManager::applyRuntimeChanges(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane) {
+void GUIManager::applyRuntimeChanges(SimulationManager& simManager, 
+                                    std::shared_ptr<MembraneComponent> membrane,
+                                    std::shared_ptr<BodyComponent> body) {
     // Update simulation time scale
     SimulationParameters params = simManager.getParameters();
     params.timeScale = runtimeState.timeScale;
@@ -550,7 +758,21 @@ void GUIManager::applyRuntimeChanges(SimulationManager& simManager, std::shared_
         std::cout << "Updated membrane damping to " << runtimeState.damping << std::endl;
     }
     
+    // Update body parameters
+    if (body) {
+        body->setMaterial(runtimeState.bodyMaterial);
+        body->setHeight(runtimeState.bodyHeight);
+        body->setThickness(runtimeState.bodyThickness);
+        body->setMasterGain(runtimeState.bodyMasterGain);
+        
+        std::cout << "Updated body material to " << runtimeState.bodyMaterial << std::endl;
+        std::cout << "Updated body height to " << runtimeState.bodyHeight << std::endl;
+        std::cout << "Updated body thickness to " << runtimeState.bodyThickness << std::endl;
+        std::cout << "Updated body master gain to " << runtimeState.bodyMasterGain << std::endl;
+    }
+    
     std::cout << "Applied runtime parameter changes" << std::endl;
 }
+
 
 } // namespace drumforge

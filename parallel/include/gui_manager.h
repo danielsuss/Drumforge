@@ -4,6 +4,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <memory>
+#include "body_component.h"  // Include the complete header instead of forward declaration
 
 // Forward declarations
 namespace drumforge {
@@ -65,6 +66,12 @@ private:
         float tension;
         float damping;
         bool showDebugInfo;
+        
+        // Body parameters
+        std::string bodyMaterial;
+        float bodyHeight;
+        float bodyThickness;
+        float bodyMasterGain;
     } runtimeState;
     
     // Constructor (private for singleton)
@@ -94,7 +101,9 @@ public:
     void renderFrame();
     
     // Render the appropriate GUI based on application state
-    void renderGUI(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane);
+    void renderGUI(SimulationManager& simManager, 
+                  std::shared_ptr<MembraneComponent> membrane,
+                  std::shared_ptr<BodyComponent> body = nullptr);
     
     // Application state methods
     AppState getState() const { return currentState; }
@@ -119,10 +128,14 @@ public:
 private:
     // Render specific GUI screens
     void renderMainMenu();
-    void renderSimulationGUI(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane);
+    void renderSimulationGUI(SimulationManager& simManager, 
+                            std::shared_ptr<MembraneComponent> membrane,
+                            std::shared_ptr<BodyComponent> body);
     
     // Apply runtime parameter changes to the simulation
-    void applyRuntimeChanges(SimulationManager& simManager, std::shared_ptr<MembraneComponent> membrane);
+    void applyRuntimeChanges(SimulationManager& simManager, 
+                            std::shared_ptr<MembraneComponent> membrane,
+                            std::shared_ptr<BodyComponent> body = nullptr);
 };
 
 } // namespace drumforge

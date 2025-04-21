@@ -178,10 +178,58 @@ CouplingData BodyComponent::getInterfaceData() {
 }
 
 void BodyComponent::setCouplingData(const CouplingData& data) {
-    // To be implemented for coupling with the membrane:
-    // 1. Extract membrane displacements from coupling data
-    // 2. Calculate modal excitation from membrane displacements
-    // 3. Apply excitation to the modes
+    // Only process membrane to body coupling
+    if (data.type != CouplingData::Type::MEMBRANE_TO_BODY) {
+        return;
+    }
+    
+    // Check if we have impact energy (from a strike) to excite the body
+    if (data.impactEnergy > 0.0f) {
+        // The impact energy determines how strongly to excite the body
+        float excitationAmount = data.impactEnergy * 0.2f;  // Scale as needed
+        
+        // Create an excitation pattern based on the impact position
+        // This will determine which modes are excited more strongly
+        std::vector<float> excitationPattern(kernelParams->numModes, 0.0f);
+        
+        // Calculate mode excitation based on impact position
+        // Different positions will excite different mode patterns
+        float posX = data.impactPosition.x;  // Normalized [0,1] position
+        float posY = data.impactPosition.y;
+        
+        for (int i = 0; i < kernelParams->numModes; i++) {
+            // Mode number affects spatial response
+            float modeNumber = static_cast<float>(i + 1);
+            
+            // Calculate position-dependent excitation
+            // Center strikes excite symmetric modes more
+            // Edge strikes excite asymmetric modes more
+            float distFromCenter = sqrtf(
+                powf(posX - 0.5f, 2.0f) + 
+                powf(posY - 0.5f, 2.0f)
+            );
+            
+            // Position-dependent excitation
+            float spatial = cos(modeNumber * distFromCenter * M_PI);
+            
+            // Higher modes get less excitation (typical for physical systems)
+            float modeWeight = 1.0f / sqrtf(modeNumber);
+            
+            // Combine factors
+            excitationPattern[i] = fabsf(spatial) * modeWeight * excitationAmount;
+        }
+        
+        // Apply the excitation pattern to the body
+        exciteAllModes(excitationPattern);
+        
+        std::cout << "Body excited by membrane impact (energy=" 
+                  << data.impactEnergy << ", position=(" 
+                  << posX << "," << posY << "))" << std::endl;
+    }
+    
+    // Use membrane displacements to continuously drive body resonance
+    // This could be implemented for more continuous coupling if needed
+    // For now, we'll focus on the impact-based coupling
 }
 
 std::string BodyComponent::getName() const {
