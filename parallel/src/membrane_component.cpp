@@ -590,16 +590,11 @@ void MembraneComponent::setAudioGain(float gain) {
 }
 
 void MembraneComponent::updateAudio(float timestep) {
-    // Apply the same timestep scaling that worked in the original
+    // Apply timestep scaling
     timestep *= 1.0f/60.0f;
     
     // Get reference to AudioManager
     AudioManager& audioManager = AudioManager::getInstance();
-    
-    // Only sample if recording is active
-    if (!audioManager.getIsRecording()) {
-        return;
-    }
     
     // Initialize audio channels if needed
     if (!audioChannelsInitialized || audioChannelIndices.empty()) {
@@ -609,11 +604,8 @@ void MembraneComponent::updateAudio(float timestep) {
     // Get height field for efficient sampling
     const std::vector<float>& heights = getHeights();
     
+    // Update channel values only - no sample recording
     if (useMixedOutput) {
-        // Approach 1: Collect signals from all microphones and mix them
-        float mixedSignal = 0.0f;
-        int activeMicCount = 0;
-        
         for (int i = 0; i < static_cast<int>(microphones.size()); ++i) {
             const auto& mic = microphones[i];
             if (!mic.enabled) continue;
@@ -631,6 +623,61 @@ void MembraneComponent::updateAudio(float timestep) {
                 if (i < static_cast<int>(audioChannelIndices.size())) {
                     audioManager.setChannelValue(audioChannelIndices[i], displacement);
                 }
+            }
+        }
+    } else {
+        // Non-mixed mode
+        for (int i = 0; i < static_cast<int>(microphones.size()); ++i) {
+            const auto& mic = microphones[i];
+            if (!mic.enabled) continue;
+            
+            // Convert to grid coordinates
+            int gridX = static_cast<int>(mic.position.x * membraneWidth);
+            int gridY = static_cast<int>(mic.position.y * membraneHeight);
+            
+            // Get displacement
+            if (isInsideCircle(gridX, gridY)) {
+                int idx = gridY * membraneWidth + gridX;
+                float displacement = heights[idx] * mic.gain;
+                
+                // Update channel value (for visualization/monitoring)
+                if (i < static_cast<int>(audioChannelIndices.size())) {
+                    audioManager.setChannelValue(audioChannelIndices[i], displacement);
+                }
+                
+                // Only process the first active microphone in non-mixed mode
+                break;
+            }
+        }
+    }
+}
+
+float MembraneComponent::getAudioSample(float timestep) {
+    // Similar to updateAudio but returns the final sample instead of processing it
+    
+    // Apply the same timestep scaling
+    timestep *= 1.0f/60.0f;
+    
+    // Get height field for efficient sampling
+    const std::vector<float>& heights = getHeights();
+    
+    if (useMixedOutput) {
+        // Collect signals from all microphones and mix them
+        float mixedSignal = 0.0f;
+        int activeMicCount = 0;
+        
+        for (int i = 0; i < static_cast<int>(microphones.size()); ++i) {
+            const auto& mic = microphones[i];
+            if (!mic.enabled) continue;
+            
+            // Convert to grid coordinates
+            int gridX = static_cast<int>(mic.position.x * membraneWidth);
+            int gridY = static_cast<int>(mic.position.y * membraneHeight);
+            
+            // Get displacement 
+            if (isInsideCircle(gridX, gridY)) {
+                int idx = gridY * membraneWidth + gridX;
+                float displacement = heights[idx] * mic.gain;
                 
                 // Add to mix
                 mixedSignal += displacement;
@@ -638,17 +685,14 @@ void MembraneComponent::updateAudio(float timestep) {
             }
         }
         
-        // Apply mixing formula and master gain (same as original)
+        // Apply mixing formula and master gain
         if (activeMicCount > 0) {
             mixedSignal /= sqrt(static_cast<float>(activeMicCount));
             mixedSignal *= masterGain;
-            
-            // Only add one sample to the buffer
-            audioManager.processAudioStep(timestep, mixedSignal);
+            return mixedSignal;
         }
-    } 
-    else {
-        // Approach 2: Only process the first active microphone (like original)
+    } else {
+        // Process only the first active microphone
         for (int i = 0; i < static_cast<int>(microphones.size()); ++i) {
             const auto& mic = microphones[i];
             if (!mic.enabled) continue;
@@ -661,20 +705,12 @@ void MembraneComponent::updateAudio(float timestep) {
             if (isInsideCircle(gridX, gridY)) {
                 int idx = gridY * membraneWidth + gridX;
                 float displacement = heights[idx] * mic.gain * masterGain;
-                
-                // Update channel value (for visualization/monitoring)
-                if (i < static_cast<int>(audioChannelIndices.size())) {
-                    audioManager.setChannelValue(audioChannelIndices[i], displacement);
-                }
-                
-                // Process just this single microphone
-                audioManager.processAudioStep(timestep, displacement);
-                
-                // Use only the first active microphone (return early)
-                return;
+                return displacement;
             }
         }
     }
+    
+    return 0.0f; // No active microphones
 }
 
 int MembraneComponent::addMicrophone(float x, float y, float gain, const std::string& name) {

@@ -48,6 +48,8 @@ public:
     
     // Get the component name for identification
     virtual std::string getName() const = 0;
+
+    virtual float getAudioSample(float timestep) { return 0.0f; }
     
     // Calculate a stable timestep for this component
     virtual float calculateStableTimestep() const = 0;

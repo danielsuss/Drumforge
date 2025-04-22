@@ -339,11 +339,6 @@ void BodyComponent::updateAudio(float timestep) {
     // Get reference to AudioManager
     AudioManager& audioManager = AudioManager::getInstance();
     
-    // Only sample if recording is active
-    if (!audioManager.getIsRecording()) {
-        return;
-    }
-    
     // Initialize audio channels if needed
     if (!audioChannelsInitialized || audioChannelIndices.empty()) {
         initializeAudioChannels();
@@ -356,9 +351,54 @@ void BodyComponent::updateAudio(float timestep) {
     std::vector<ResonantMode> modes(kernelParams->numModes);
     d_modes->copyToHost(modes.data());
     
-    // Process for each microphone
+    // Update channel values only
+    for (int i = 0; i < static_cast<int>(microphones.size()); ++i) {
+        const auto& mic = microphones[i];
+        if (!mic.enabled) continue;
+        
+        // Sample this microphone position
+        float sample = 0.0f;
+        
+        // Calculate sample by summing modal contributions with position weighting
+        for (int modeIdx = 0; modeIdx < kernelParams->numModes; modeIdx++) {
+            float amplitude = modes[modeIdx].amplitude;
+            float state = h_modeStates[modeIdx];
+            
+            // Calculate spatial weighting based on microphone position
+            float modeNumber = static_cast<float>(modeIdx + 1);
+            float theta = mic.position.x * 2.0f * M_PI;
+            float heightPos = mic.height;
+            
+            // Spatial weighting (similar to kernel function)
+            float spatialWeight = cos(modeNumber * theta) * 
+                                 sin(modeNumber * heightPos * M_PI);
+            
+            // Add contribution
+            sample += amplitude * state * spatialWeight;
+        }
+        
+        // Apply microphone gain
+        sample *= mic.gain;
+        
+        // Update channel value for monitoring
+        if (i < static_cast<int>(audioChannelIndices.size())) {
+            audioManager.setChannelValue(audioChannelIndices[i], sample);
+        }
+    }
+}
+
+float BodyComponent::getAudioSample(float timestep) {
+    // Similar to updateAudio but returns the final sample
+
+    // Copy current mode states if not already done
+    getModeStates();
+    
+    // Get the modes from device if needed
+    std::vector<ResonantMode> modes(kernelParams->numModes);
+    d_modes->copyToHost(modes.data());
+    
     if (useMixedOutput) {
-        // Approach 1: Collect signals from all microphones and mix them
+        // Collect signals from all microphones and mix them
         float mixedSignal = 0.0f;
         int activeMicCount = 0;
         
@@ -369,31 +409,24 @@ void BodyComponent::updateAudio(float timestep) {
             // Sample this microphone position
             float sample = 0.0f;
             
-            // Calculate sample by summing modal contributions with position weighting
+            // Calculate sample by summing modal contributions
             for (int modeIdx = 0; modeIdx < kernelParams->numModes; modeIdx++) {
                 float amplitude = modes[modeIdx].amplitude;
                 float state = h_modeStates[modeIdx];
                 
-                // Calculate spatial weighting based on microphone position
+                // Calculate spatial weighting
                 float modeNumber = static_cast<float>(modeIdx + 1);
                 float theta = mic.position.x * 2.0f * M_PI;
                 float heightPos = mic.height;
                 
-                // Spatial weighting (similar to kernel function)
                 float spatialWeight = cos(modeNumber * theta) * 
                                      sin(modeNumber * heightPos * M_PI);
                 
-                // Add contribution
                 sample += amplitude * state * spatialWeight;
             }
             
             // Apply microphone gain
             sample *= mic.gain;
-            
-            // Update channel value for monitoring
-            if (i < static_cast<int>(audioChannelIndices.size())) {
-                audioManager.setChannelValue(audioChannelIndices[i], sample);
-            }
             
             // Add to mix
             mixedSignal += sample;
@@ -404,13 +437,10 @@ void BodyComponent::updateAudio(float timestep) {
         if (activeMicCount > 0) {
             mixedSignal /= sqrt(static_cast<float>(activeMicCount));
             mixedSignal *= masterGain;
-            
-            // Process the mixed sample
-            audioManager.processAudioStep(timestep, mixedSignal);
+            return mixedSignal;
         }
-    } 
-    else {
-        // Approach 2: Only process the first active microphone
+    } else {
+        // Only the first active microphone
         for (int i = 0; i < static_cast<int>(microphones.size()); ++i) {
             const auto& mic = microphones[i];
             if (!mic.enabled) continue;
@@ -418,39 +448,28 @@ void BodyComponent::updateAudio(float timestep) {
             // Sample this microphone position
             float sample = 0.0f;
             
-            // Calculate sample by summing modal contributions with position weighting
+            // Calculate sample by summing modal contributions
             for (int modeIdx = 0; modeIdx < kernelParams->numModes; modeIdx++) {
                 float amplitude = modes[modeIdx].amplitude;
                 float state = h_modeStates[modeIdx];
                 
-                // Calculate spatial weighting based on microphone position
                 float modeNumber = static_cast<float>(modeIdx + 1);
                 float theta = mic.position.x * 2.0f * M_PI;
                 float heightPos = mic.height;
                 
-                // Spatial weighting (similar to kernel function)
                 float spatialWeight = cos(modeNumber * theta) * 
                                      sin(modeNumber * heightPos * M_PI);
                 
-                // Add contribution
                 sample += amplitude * state * spatialWeight;
             }
             
             // Apply microphone gain and master gain
             sample *= mic.gain * masterGain;
-            
-            // Update channel value for monitoring
-            if (i < static_cast<int>(audioChannelIndices.size())) {
-                audioManager.setChannelValue(audioChannelIndices[i], sample);
-            }
-            
-            // Process just this single microphone
-            audioManager.processAudioStep(timestep, sample);
-            
-            // Use only the first active microphone
-            break;
+            return sample;
         }
     }
+    
+    return 0.0f; // No active microphones
 }
 
 //-----------------------------------------------------------------------------

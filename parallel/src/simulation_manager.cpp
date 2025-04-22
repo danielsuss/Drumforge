@@ -105,8 +105,30 @@ void SimulationManager::advance(float deltaTime) {
             }
         }
         
-        // Process audio once per simulation step - either mixed or individual channels
+        // Process audio once per simulation step - collect samples from all components
         AudioManager& audioManager = AudioManager::getInstance();
+        if (audioManager.getIsRecording()) {
+            // Collect samples from all audio-capable components
+            float mixedSample = 0.0f;
+            int activeComponents = 0;
+            
+            for (auto& component : components) {
+                if (component->hasAudio()) {
+                    float sample = component->getAudioSample(stableTimestep);
+                    if (sample != 0.0f) {
+                        mixedSample += sample;
+                        activeComponents++;
+                    }
+                }
+            }
+            
+            // Apply mixing and add the single sample to the buffer
+            if (activeComponents > 0) {
+                // Use same mixing formula as individual components
+                mixedSample /= sqrt(static_cast<float>(activeComponents));
+                audioManager.processAudioStep(stableTimestep, mixedSample);
+            }
+        }
         
         // Update simulation time
         currentTime += stableTimestep;

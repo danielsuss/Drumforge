@@ -149,6 +149,7 @@ public:
     void initializeAudioChannels();
     void updateAudio(float timestep);
     bool hasAudio() const { return true; }
+    float getAudioSample(float timestep) override;
     
     // Body-specific methods
     void reset();

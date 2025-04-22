@@ -163,6 +163,7 @@ public:
     void initializeAudioChannels() override;
     void updateAudio(float timestep) override;
     bool hasAudio() const override { return true; }
+    float getAudioSample(float timestep) override;
     
     // Microphone management
     int addMicrophone(float x, float y, float gain = 1.0f, const std::string& name = "");
