@@ -701,4 +701,15 @@ const std::vector<float>& BodyComponent::getModeVelocities() const {
     return h_modeVelocities;
 }
 
+void BodyComponent::setCustomParameters(int numModes, float minFreq, float maxFreq) {
+    if (kernelParams) {
+        kernelParams->numModes = numModes;
+        kernelParams->minFrequency = minFreq;
+        kernelParams->maxFrequency = maxFreq;
+        
+        std::cout << "Body resonator set to use " << numModes << " modes"
+                  << " with frequency range " << minFreq << " - " << maxFreq << " Hz" << std::endl;
+    }
+}
+
 } // namespace drumforge

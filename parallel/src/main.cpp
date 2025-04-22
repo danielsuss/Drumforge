@@ -1,6 +1,7 @@
 #include "cuda_memory_manager.h"
 #include "simulation_manager.h"
 #include "membrane_component.h"
+#include "body_component.h"
 #include "visualization_manager.h"
 #include "input_handler.h"
 #include "gui_manager.h"
@@ -158,6 +159,29 @@ int main(int argc, char* argv[]) {
                     inputHandler->connectMembrane(membrane);
                     std::cout << "Membrane connected to input handler - click on the membrane to apply impulses" << std::endl;
                 }
+
+                // Create the body component with the same radius as the membrane
+                std::cout << "Creating body component..." << std::endl;
+                std::shared_ptr<drumforge::BodyComponent> body = std::make_shared<drumforge::BodyComponent>(
+                    "DrumShell",
+                    membraneRadius,             // Same radius as the membrane
+                    membraneRadius * 0.8f,      // Height (80% of radius for reasonable proportions)
+                    membraneRadius * 0.05f,     // Thickness (5% of radius)
+                    "Maple"                     // Default material
+                );
+
+                // Add body to simulation
+                simManager.addComponent(body);
+
+                // Set custom parameters before initialization
+                // This will reduce the number of modes and limit the max frequency
+                // We'll add this code right before calling initialize()
+                body->setCustomParameters(32, 60.0f, 1200.0f);
+
+                // Initialize the body component
+                body->initialize();
+                CHECK_CUDA_ERRORS();
+                std::cout << "Body component initialized successfully" << std::endl;
                 
                 // Mark simulation as initialized
                 simulationInitialized = true;

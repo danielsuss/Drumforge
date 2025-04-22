@@ -148,6 +148,10 @@ float SimulationManager::calculateStableTimestep() const {
     if (minTimestep == std::numeric_limits<float>::max()) {
         return 0.001f; // Default timestep of 1ms
     }
+
+    minTimestep = 0.05f;
+
+    std::cout << "Calculated stable timestep: " << minTimestep << std::endl;
     
     return minTimestep;
 }

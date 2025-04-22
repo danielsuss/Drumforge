@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 #include <glm/glm.hpp>
+#include <iostream>
 
 namespace drumforge {
 
@@ -129,6 +130,15 @@ public:
     DimensionRequirement getDimensionRequirement() const override {
         return DimensionRequirement::DIMENSION_3D;
     }
+
+    /**
+     * @brief Set custom parameters for the body resonator
+     * 
+     * @param numModes Number of resonant modes to use
+     * @param minFreq Minimum frequency in Hz
+     * @param maxFreq Maximum frequency in Hz
+     */
+    void setCustomParameters(int numModes, float minFreq, float maxFreq);
     
     // Visualization-related methods
     bool isVisualizable() const override { return true; }
