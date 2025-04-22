@@ -151,7 +151,7 @@ float SimulationManager::calculateStableTimestep() const {
 
     minTimestep = 0.05f;
 
-    std::cout << "Calculated stable timestep: " << minTimestep << std::endl;
+    // std::cout << "Calculated stable timestep: " << minTimestep << std::endl;
     
     return minTimestep;
 }

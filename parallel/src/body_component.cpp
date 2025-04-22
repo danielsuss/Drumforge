@@ -197,6 +197,10 @@ float BodyComponent::calculateStableTimestep() const {
 // Visualization Methods
 //-----------------------------------------------------------------------------
 
+// In body_component.cpp
+// We need to modify the initializeVisualization method to use X-Y plane for the circular
+// cross-section and Z for height
+
 void BodyComponent::initializeVisualization(VisualizationManager& visManager) {
     // Check if already initialized
     if (vaoId != 0) {
@@ -216,14 +220,18 @@ void BodyComponent::initializeVisualization(VisualizationManager& visManager) {
         
         // Calculate vertices
         for (int ring = 0; ring <= numRings; ring++) {
-            float y = (static_cast<float>(ring) / numRings) * height - (height / 2.0f);
+            // Use Z for height (instead of Y as before)
+            // We want the drum membrane to be at Z=0, so the body extends into negative Z
+            float z = -((static_cast<float>(ring) / numRings) * height);
             
             for (int segment = 0; segment <= numSegments; segment++) {
                 float angle = (static_cast<float>(segment) / numSegments) * 2.0f * M_PI;
-                float x = radius * cos(angle);
-                float z = radius * sin(angle);
                 
-                // Add vertex position
+                // Use X and Y for the circular cross-section (instead of X and Z as before)
+                float x = radius * cos(angle);
+                float y = radius * sin(angle);
+                
+                // Add vertex position (x, y, z) - note the changed order
                 vertices.push_back(x);
                 vertices.push_back(y);
                 vertices.push_back(z);
@@ -240,11 +248,11 @@ void BodyComponent::initializeVisualization(VisualizationManager& visManager) {
                 unsigned int bottomRight = bottomLeft + 1;
                 
                 // Add lines for the wireframe
-                // Horizontal lines
+                // Horizontal lines (around circumference)
                 indices.push_back(topLeft);
                 indices.push_back(topRight);
                 
-                // Vertical lines
+                // Vertical lines (along height)
                 indices.push_back(topLeft);
                 indices.push_back(bottomLeft);
             }
@@ -274,13 +282,13 @@ void BodyComponent::initializeVisualization(VisualizationManager& visManager) {
 }
 
 void BodyComponent::visualize(VisualizationManager& visManager) {
-    // Tell the visualization manager to render this component
-    // The body uses a wireframe with a warm color (brownish for wood)
+    // The body now uses the same coordinate system as the membrane,
+    // so we don't need any special transformation
     visManager.renderWireframe(
-        vaoId,                  // VAO containing the body geometry
-        eboId,                  // EBO containing the wireframe indices
-        getNumWireframeIndices(),  // Number of indices to draw
-        glm::vec3(0.7f, 0.4f, 0.2f)  // Brownish color for wood
+        vaoId,                      // VAO containing the body geometry
+        eboId,                      // EBO containing the wireframe indices
+        getNumWireframeIndices(),   // Number of indices to draw
+        glm::vec3(0.7f, 0.4f, 0.2f) // Brownish color for wood
     );
 }
 
