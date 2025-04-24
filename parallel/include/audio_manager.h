@@ -46,6 +46,10 @@ private:
     bool useChannelMixing;                   // Whether to mix all channels (true) or use discrete channels (false)
     float masterGain;                        // Global gain applied to all channels
 
+    double audioAccumulatedTime;    // Separate time tracking for audio
+    double nextSampleTime;          // When the next sample should be generated
+
+
     // Private constructor for singleton
     AudioManager();
     

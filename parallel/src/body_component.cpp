@@ -336,6 +336,8 @@ void BodyComponent::initializeAudioChannels() {
 }
 
 void BodyComponent::updateAudio(float timestep) {
+
+    timestep *= 1.0f/60.0f;
     // Get reference to AudioManager
     AudioManager& audioManager = AudioManager::getInstance();
     

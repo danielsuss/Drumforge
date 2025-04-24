@@ -98,7 +98,7 @@ void SimulationManager::advance(float deltaTime) {
             coupling.target->setCouplingData(data);
         }
         
-        // Update audio channel values for visualization/monitoring only
+        // Update channel values for UI visualization only
         // This doesn't generate audio samples, just updates the UI values
         for (auto& component : components) {
             if (component->hasAudio()) {
@@ -123,18 +123,13 @@ void SimulationManager::advance(float deltaTime) {
                 }
             }
             
-            // Apply mixing formula and add the single sample to the buffer
+            // Apply mixing formula and add the sample to the buffer
             if (activeComponents > 0) {
                 // Use same mixing formula as individual components
                 mixedSample /= sqrt(static_cast<float>(activeComponents));
                 
-                // Calculate the proper audio sample interval
-                float audioSampleInterval = 1.0f / audioManager.getSampleRate();
-                
-                // Generate a single audio sample per physics step
-                // This is the key fix - we're only processing ONE sample 
-                // and letting AudioManager handle interpolation if needed
-                audioManager.processAudioStep(audioSampleInterval, mixedSample);
+                // Process the mixed sample using the actual simulation timestep
+                audioManager.processAudioStep(stableTimestep, mixedSample);
             }
         }
         

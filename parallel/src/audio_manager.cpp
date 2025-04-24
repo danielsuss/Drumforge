@@ -14,6 +14,8 @@ AudioManager::AudioManager()
     : sampleRate(44100)
     , isRecording(false)
     , accumulatedTime(0.0)
+    , audioAccumulatedTime(0.0)
+    , nextSampleTime(0.0)
     , sampleInterval(0.0)
     , useChannelMixing(true)
     , masterGain(1.0f) {
@@ -21,8 +23,6 @@ AudioManager::AudioManager()
     interpolationState.lastValue = 0.0f;
     interpolationState.currentValue = 0.0f;
     interpolationState.lastSampleTime = 0.0;
-    
-    std::cout << "AudioManager created" << std::endl;
 }
 
 AudioManager& AudioManager::getInstance() {
@@ -160,6 +160,8 @@ void AudioManager::processMixedAudioStep(float simulationTimeStep) {
 void AudioManager::startRecording() {
     clearRecordBuffer();
     accumulatedTime = 0.0;
+    audioAccumulatedTime = 0.0;
+    nextSampleTime = 0.0;
     isRecording = true;
     
     // Reset interpolation state
@@ -193,24 +195,40 @@ void AudioManager::processAudioStep(float simulationTimeStep, float currentSampl
     interpolationState.lastValue = interpolationState.currentValue;
     interpolationState.currentValue = currentSampleValue;
     
-    // Update time tracking
+    // Update physics time tracking
     double previousTime = accumulatedTime;
     accumulatedTime += simulationTimeStep;
+    interpolationState.lastSampleTime = previousTime;
     
-    // For the first sample, just store the value without interpolation
+    // For the first sample, initialize audio time tracking
     if (recordBuffer.empty()) {
         recordBuffer.push_back(currentSampleValue);
-        interpolationState.lastSampleTime = 0.0;
+        audioAccumulatedTime = 0.0;
+        nextSampleTime = sampleInterval;
         return;
     }
     
-    interpolationState.lastSampleTime = previousTime;
+    // Calculate how many audio samples to generate based on elapsed simulation time
+    // But limit to a reasonable number to prevent huge bursts of samples
+    const int maxSamplesPerStep = 100;  // Safety limit
+    int samplesNeeded = 0;
     
-    // ADD RATE LIMITING: Only generate ONE sample per call
-    float sample = getInterpolatedSample(accumulatedTime);
-    recordBuffer.push_back(sample);
+    audioAccumulatedTime += simulationTimeStep;
+    while (nextSampleTime <= audioAccumulatedTime && samplesNeeded < maxSamplesPerStep) {
+        // Get interpolated sample at exact time point
+        float sample = getInterpolatedSample(nextSampleTime);
+        recordBuffer.push_back(sample);
+        
+        // Move to next sample time
+        nextSampleTime += sampleInterval;
+        samplesNeeded++;
+    }
     
-    // REMOVE the while loop that generates multiple samples
+    if (samplesNeeded >= maxSamplesPerStep) {
+        // If we hit the safety limit, adjust audio time to avoid falling behind
+        audioAccumulatedTime = nextSampleTime - sampleInterval;
+        std::cout << "Warning: Audio sample generation limited to prevent overflow" << std::endl;
+    }
 }
 
 float AudioManager::getInterpolatedSample(double time) {
