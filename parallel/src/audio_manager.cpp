@@ -206,20 +206,11 @@ void AudioManager::processAudioStep(float simulationTimeStep, float currentSampl
     
     interpolationState.lastSampleTime = previousTime;
     
-    // Calculate how many audio samples we need for this time step
-    double nextSampleTime = (recordBuffer.size() * sampleInterval);
+    // ADD RATE LIMITING: Only generate ONE sample per call
+    float sample = getInterpolatedSample(accumulatedTime);
+    recordBuffer.push_back(sample);
     
-    // Generate all audio samples needed to cover this simulation step
-    while (nextSampleTime <= accumulatedTime) {
-        // Get interpolated sample at exactly the right time point
-        float sample = getInterpolatedSample(nextSampleTime);
-        
-        // Add to record buffer
-        recordBuffer.push_back(sample);
-        
-        // Move to next sample time
-        nextSampleTime = (recordBuffer.size() * sampleInterval);
-    }
+    // REMOVE the while loop that generates multiple samples
 }
 
 float AudioManager::getInterpolatedSample(double time) {

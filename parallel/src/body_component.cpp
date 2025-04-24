@@ -389,7 +389,7 @@ void BodyComponent::updateAudio(float timestep) {
 
 float BodyComponent::getAudioSample(float timestep) {
     // Similar to updateAudio but returns the final sample
-
+    timestep *= 1.0f/60.0f;
     // Copy current mode states if not already done
     getModeStates();
     

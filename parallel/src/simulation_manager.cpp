@@ -86,7 +86,7 @@ void SimulationManager::advance(float deltaTime) {
     
     // Update components with fixed time steps
     while (accumulatedTime >= stableTimestep) {
-        // First update all components
+        // First update all components (physics simulation only)
         for (auto& component : components) {
             component->update(stableTimestep);
         }
@@ -98,14 +98,15 @@ void SimulationManager::advance(float deltaTime) {
             coupling.target->setCouplingData(data);
         }
         
-        // Update audio channel values for all components (but don't process audio yet)
+        // Update audio channel values for visualization/monitoring only
+        // This doesn't generate audio samples, just updates the UI values
         for (auto& component : components) {
             if (component->hasAudio()) {
                 component->updateAudio(stableTimestep);
             }
         }
         
-        // Process audio once per simulation step - collect samples from all components
+        // Process audio once per simulation step
         AudioManager& audioManager = AudioManager::getInstance();
         if (audioManager.getIsRecording()) {
             // Collect samples from all audio-capable components
@@ -122,11 +123,18 @@ void SimulationManager::advance(float deltaTime) {
                 }
             }
             
-            // Apply mixing and add the single sample to the buffer
+            // Apply mixing formula and add the single sample to the buffer
             if (activeComponents > 0) {
                 // Use same mixing formula as individual components
                 mixedSample /= sqrt(static_cast<float>(activeComponents));
-                audioManager.processAudioStep(stableTimestep, mixedSample);
+                
+                // Calculate the proper audio sample interval
+                float audioSampleInterval = 1.0f / audioManager.getSampleRate();
+                
+                // Generate a single audio sample per physics step
+                // This is the key fix - we're only processing ONE sample 
+                // and letting AudioManager handle interpolation if needed
+                audioManager.processAudioStep(audioSampleInterval, mixedSample);
             }
         }
         

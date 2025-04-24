@@ -185,8 +185,6 @@ void MembraneComponent::update(float timestep) {
     // Update the membrane simulation
     updateMembrane(d_heights->get(), d_prevHeights->get(), d_velocities->get(),
                   d_circleMask->get(), *kernelParams, safeTimestep);
-
-    updateAudio(timestep);
 }
 
 void MembraneComponent::prepareForVisualization() {
