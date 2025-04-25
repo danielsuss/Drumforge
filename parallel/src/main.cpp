@@ -164,24 +164,26 @@ int main(int argc, char* argv[]) {
                 try {
                     std::cout << "Creating body component..." << std::endl;
                     float bodyRadius = membrane->getRadius();
-                    float bodyHeight = bodyRadius * 0.4f;
-                    float bodyThickness = bodyRadius * 0.01f;
+                    float bodyHeight = bodyRadius * guiManager.getConfigBodyHeight();
+                    float bodyThickness = bodyRadius * guiManager.getConfigBodyThickness();
+                    std::string bodyMaterial = guiManager.getConfigBodyMaterial();
                     
                     body = std::make_shared<drumforge::BodyComponent>(
                         "DrumShell", 
                         bodyRadius,    // Same radius as membrane
-                        bodyHeight,    // Height = 40% of radius  
-                        bodyThickness, // Thickness = 1% of radius
-                        "Maple"        // Material
+                        bodyHeight,    // Height from config 
+                        bodyThickness, // Thickness from config
+                        bodyMaterial   // Material from config
                     );
                     
                     // Add body to simulation
                     simManager.addComponent(body);
-
+                    
+                    // Explicitly initialize the body component (like in "body" branch)
                     body->initialize();
                     CHECK_CUDA_ERRORS();
                     
-                    // Set up coupling from membrane to body only for now
+                    // Set up coupling from membrane to body
                     simManager.setupCoupling(membrane, body);
                     
                     std::cout << "Body component created and coupled successfully" << std::endl;

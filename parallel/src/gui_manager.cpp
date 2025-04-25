@@ -201,6 +201,45 @@ void GUIManager::renderMainMenu() {
     
     ImGui::Spacing();
     ImGui::Spacing();
+
+    // Body Configuration Section
+    ImGui::TextColored(ImVec4(0.8f, 0.6f, 0.2f, 1.0f), "Body Configuration");
+    ImGui::Separator();
+
+    // Material selection
+    const char* materials[] = { "Maple", "Birch", "Mahogany", "Metal", "Acrylic" };
+    static int currentMaterial = 0;
+
+    // Find current material in the list
+    for (int i = 0; i < IM_ARRAYSIZE(materials); i++) {
+        if (configState.bodyMaterial == materials[i]) {
+            currentMaterial = i;
+            break;
+        }
+    }
+
+    // Display material combo box
+    if (ImGui::Combo("Shell Material", &currentMaterial, materials, IM_ARRAYSIZE(materials))) {
+        configState.bodyMaterial = materials[currentMaterial];
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Different materials produce different tonal qualities");
+    }
+
+    // Body height as proportion of radius
+    ImGui::SliderFloat("Shell Height", &configState.bodyHeight, 0.2f, 1.0f, "%.2f");
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Height of the shell as a proportion of the membrane radius");
+    }
+
+    // Shell thickness as proportion of radius
+    ImGui::SliderFloat("Shell Thickness", &configState.bodyThickness, 0.005f, 0.05f, "%.3f");
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Thickness of the shell as a proportion of the membrane radius");
+    }
+
+    ImGui::Spacing();
+    ImGui::Spacing();
     
     // Simulation Controls Section
     ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.8f, 1.0f), "Simulation Controls");

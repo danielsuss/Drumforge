@@ -53,6 +53,11 @@ private:
         float radius;
         float tension;
         float damping;
+
+        // Body params
+        std::string bodyMaterial = "Maple"; // Default material
+        float bodyHeight = 0.4f;            // Default height as proportion of radius
+        float bodyThickness = 0.01f;        // Default thickness as proportion of radius
         
         // Flags
         bool readyToInitialize;  // Set when user confirms settings
@@ -115,6 +120,10 @@ public:
     float getConfigTension() const { return configState.tension; }
     float getConfigDamping() const { return configState.damping; }
     float getConfigTimeScale() const { return configState.timeScale; }
+
+    const std::string& getConfigBodyMaterial() const { return configState.bodyMaterial; }
+    float getConfigBodyHeight() const { return configState.bodyHeight; }
+    float getConfigBodyThickness() const { return configState.bodyThickness; }
 
 private:
     // Render specific GUI screens
