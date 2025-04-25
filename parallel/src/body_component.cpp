@@ -186,7 +186,13 @@ CouplingData BodyComponent::getInterfaceData() {
 }
 
 void BodyComponent::setCouplingData(const CouplingData& data) {
+
     if (data.hasImpact) {
+
+        std::cout << "Body receiving impact: strength=" << data.impactStrength
+                  << ", position=(" << data.impactPosition.x << "," 
+                  << data.impactPosition.y << ")" << std::endl;
+
         // Calculate impact position in polar coordinates relative to center
         glm::vec2 normalizedPos = data.impactPosition - glm::vec2(0.5f, 0.5f);
         float radialDist = glm::length(normalizedPos) * 2.0f;  // [0-1] range
@@ -226,10 +232,16 @@ void BodyComponent::setCouplingData(const CouplingData& data) {
             
             // Scale based on expected energy distribution - lower modes receive more energy
             excitation[i] /= (1.0f + 0.1f*n + 0.1f*m);
+
+            std::cout << "Applied excitation to " << kernelParams->numModes << " body modes" << std::endl;
         }
+
+        std::cout << "Created excitation vector for " << kernelParams->numModes << " modes" << std::endl;
         
         // Apply the calculated excitation to all modes
         exciteAllModes(excitation);
+
+        std::cout << "Applied excitation to all modes" << std::endl;
     }
 }
 

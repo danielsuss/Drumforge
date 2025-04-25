@@ -95,6 +95,16 @@ void SimulationManager::advance(float deltaTime) {
         for (auto& coupling : couplings) {
             // Exchange data between coupled components
             CouplingData data = coupling.source->getInterfaceData();
+            
+            // Only print if there's an impact
+            if (data.hasImpact) {
+                std::cout << "Coupling data from " << coupling.source->getName() 
+                        << " to " << coupling.target->getName() 
+                        << ": strength=" << data.impactStrength
+                        << ", position=(" << data.impactPosition.x 
+                        << "," << data.impactPosition.y << ")" << std::endl;
+            }
+            
             coupling.target->setCouplingData(data);
         }
         

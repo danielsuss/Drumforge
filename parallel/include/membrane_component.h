@@ -81,6 +81,7 @@ private:
         bool active;     // Whether to apply this impulse
     };
     ImpulseParams pendingImpulse;
+    bool couplingImpulsePending = false; 
 
     // Audio sampling point (legacy - replaced by microphones)
     glm::vec2 audioSamplePoint;

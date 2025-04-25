@@ -176,8 +176,8 @@ void MembraneComponent::update(float timestep) {
     float stableTimestep = calculateStableTimestep();
     float safeTimestep = (timestep > stableTimestep) ? stableTimestep : timestep;
     
-    // Check if there's a pending impulse to apply
     if (pendingImpulse.active) {
+        std::cout << "Processing pending impulse in membrane update" << std::endl;
         applyImpulse(pendingImpulse.x, pendingImpulse.y, pendingImpulse.strength);
         pendingImpulse.active = false;  // Clear the pending flag
     }
@@ -289,16 +289,20 @@ void MembraneComponent::prepareForVisualization() {
 CouplingData MembraneComponent::getInterfaceData() {
     CouplingData data;
     
-    // Include information about impacts for body excitation
-    data.hasImpact = pendingImpulse.active;
+    // Use the coupling flag instead of pendingImpulse.active
+    data.hasImpact = couplingImpulsePending;
     data.impactStrength = pendingImpulse.strength;
     data.impactPosition = glm::vec2(pendingImpulse.x, pendingImpulse.y);
     
-    // Debug output for impacts
+    // Only print if there's an impact
     if (data.hasImpact) {
         std::cout << "Membrane sending impact data: strength=" << data.impactStrength
                   << ", position=(" << data.impactPosition.x << "," 
                   << data.impactPosition.y << ")" << std::endl;
+        
+        // Reset the coupling flag after sending the data
+        couplingImpulsePending = false;
+        std::cout << "Reset couplingImpulsePending = false" << std::endl;
     }
     
     return data;
@@ -471,6 +475,10 @@ void MembraneComponent::applyImpulse(float x, float y, float strength) {
     pendingImpulse.y = y;
     pendingImpulse.strength = strength;
     pendingImpulse.active = true;
+
+    couplingImpulsePending = true;
+
+    std::cout << "Set pendingImpulse.active = " << (pendingImpulse.active ? "true" : "false") << std::endl;
 }
 
 void MembraneComponent::reset() {
