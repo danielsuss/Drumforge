@@ -10,6 +10,7 @@
 #include <thread>
 #include <stdexcept>
 #include <string>
+#include <body_component.h>
 
 // Global flag to control CUDA-OpenGL interop attempts
 bool g_enableCudaGLInterop = false;  // Set to false to disable interop completely
@@ -80,6 +81,7 @@ int main(int argc, char* argv[]) {
         
         // Create a shared pointer for the membrane component (will initialize later)
         std::shared_ptr<drumforge::MembraneComponent> membrane = nullptr;
+        std::shared_ptr<drumforge::BodyComponent> body = nullptr;
         
         // Fixed timestep for simulation
         const float timestep = 1.0f / 1.1f;  // ~60 FPS
@@ -157,6 +159,32 @@ int main(int argc, char* argv[]) {
                 if (inputHandler) {
                     inputHandler->connectMembrane(membrane);
                     std::cout << "Membrane connected to input handler - click on the membrane to apply impulses" << std::endl;
+                }
+
+                try {
+                    std::cout << "Creating body component..." << std::endl;
+                    float bodyRadius = membrane->getRadius();
+                    float bodyHeight = bodyRadius * 0.4f;
+                    float bodyThickness = bodyRadius * 0.01f;
+                    
+                    body = std::make_shared<drumforge::BodyComponent>(
+                        "DrumShell", 
+                        bodyRadius,    // Same radius as membrane
+                        bodyHeight,    // Height = 40% of radius  
+                        bodyThickness, // Thickness = 1% of radius
+                        "Maple"        // Material
+                    );
+                    
+                    // Add body to simulation
+                    simManager.addComponent(body);
+                    
+                    // Set up coupling from membrane to body only for now
+                    simManager.setupCoupling(membrane, body);
+                    
+                    std::cout << "Body component created and coupled successfully" << std::endl;
+                }
+                catch (const std::exception& e) {
+                    std::cerr << "Error creating body component: " << e.what() << std::endl;
                 }
                 
                 // Mark simulation as initialized

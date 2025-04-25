@@ -287,8 +287,21 @@ void MembraneComponent::prepareForVisualization() {
 }
 
 CouplingData MembraneComponent::getInterfaceData() {
-    // For now, return an empty struct. This will be expanded when we implement coupling.
-    return CouplingData();
+    CouplingData data;
+    
+    // Include information about impacts for body excitation
+    data.hasImpact = pendingImpulse.active;
+    data.impactStrength = pendingImpulse.strength;
+    data.impactPosition = glm::vec2(pendingImpulse.x, pendingImpulse.y);
+    
+    // Debug output for impacts
+    if (data.hasImpact) {
+        std::cout << "Membrane sending impact data: strength=" << data.impactStrength
+                  << ", position=(" << data.impactPosition.x << "," 
+                  << data.impactPosition.y << ")" << std::endl;
+    }
+    
+    return data;
 }
 
 void MembraneComponent::setCouplingData(const CouplingData& data) {

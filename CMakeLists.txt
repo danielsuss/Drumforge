@@ -73,6 +73,8 @@ set(HEADERS_PARALLEL
     parallel/include/visualization_manager.h
     parallel/include/gui_manager.h
     parallel/include/audio_manager.h
+    parallel/include/body_component.h
+    parallel/include/body_kernels.cuh
 )
 
 # Parallel source files
@@ -88,6 +90,8 @@ set(SOURCES_PARALLEL
     parallel/src/visualization_manager.cpp
     parallel/src/gui_manager.cpp
     parallel/src/audio_manager.cpp
+    parallel/src/body_component.cpp
+    parallel/src/body_kernels.cu
 )
 
 # Legacy executable

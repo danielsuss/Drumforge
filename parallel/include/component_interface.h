@@ -15,10 +15,18 @@ class VisualizationManager;
 
 // Structure to hold coupling data for interaction between components
 struct CouplingData {
-    // This will be expanded as we implement component interactions
-    // Could include forces, pressures, displacements, etc.
+    // Original data (if any)
+    std::vector<float> forcesAtBoundary;
+    std::vector<float> displacements;
+    
+    // For membrane-body coupling
+    float impactStrength = 0.0f;     // Strength of impulse
+    glm::vec2 impactPosition = glm::vec2(0.5f, 0.5f); // Position of strike [0,1]
+    bool hasImpact = false;          // Whether an impact occurred this step
+    
+    // Specific to body-membrane coupling (if implemented later)
+    std::vector<float> resonanceValues;  // Body resonance feedback
 };
-
 /**
  * @brief Base interface for all simulation components
  * 
