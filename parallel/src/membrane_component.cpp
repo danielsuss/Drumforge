@@ -466,6 +466,11 @@ void MembraneComponent::applyImpulse(float x, float y, float strength) {
     
     std::cout << "Applied impulse at position (" << x << "," << y 
               << ") with strength " << strength << std::endl;
+
+    pendingImpulse.x = x;
+    pendingImpulse.y = y;
+    pendingImpulse.strength = strength;
+    pendingImpulse.active = true;
 }
 
 void MembraneComponent::reset() {

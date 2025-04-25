@@ -22,8 +22,8 @@ __global__ void initializeModesKernel(ResonantMode* modes, const BodyKernelParam
     
     // Determine circumferential (n) and axial (m) mode numbers
     // We'll distribute the modes to get a good variety of both types
-    int n = modeIdx % params.maxCircumferentialModes;  // 0, 1, 2, ... around circumference
-    int m = (modeIdx / params.maxCircumferentialModes) % params.maxAxialModes;  // 0, 1, 2, ... along height
+    int m = modeIdx / 3;  // Every 3 modes, increment m
+    int n = 1 + (modeIdx % 7);  // Cycle through n=1..7
     
     // Avoid n=0, m=0 mode (rigid body mode with zero frequency)
     if (n == 0 && m == 0) {
@@ -31,9 +31,6 @@ __global__ void initializeModesKernel(ResonantMode* modes, const BodyKernelParam
     }
     
     // Calculate frequency using the Donnell-Mushtari shell theory formula
-    // f(m,n) = (1/2π) * √(E/[ρ(1-ν²)]) * √[(h²/12R²) * [n² + (mπR/L)²]² + (1/R²) * [1 + (mπR/L)²]]
-    
-    // Material term
     float materialTerm = sqrtf(params.youngsModulus / 
                               (params.density * (1.0f - params.poissonsRatio * params.poissonsRatio)));
     
@@ -50,18 +47,37 @@ __global__ void initializeModesKernel(ResonantMode* modes, const BodyKernelParam
     // Membrane term
     float membraneTerm = (1.0f/(R*R)) * (1.0f + mTerm*mTerm);
     
-    // Combined frequency calculation
-    float frequency = (1.0f/(2.0f*M_PI)) * materialTerm * sqrtf(bendingTerm + membraneTerm);
+    // Calculate raw frequency without scaling
+    float rawFreq = (1.0f/(2.0f*M_PI)) * materialTerm * sqrtf(bendingTerm + membraneTerm);
     
-    // Scale frequency to a reasonable range to prevent extreme values
-    // The physical formula gives raw frequencies that may need adjustment
-    // to work well in our audio system
-    float scaleFactor = 500.0f;  // Adjust based on testing
-    frequency = frequency * scaleFactor;
+    // Apply scaling
+    float scaleFactor = 500.0f;
+    float scaledFreq = rawFreq * scaleFactor;
     
-    // Ensure frequency is within our simulation's limits
-    frequency = fmaxf(params.minFrequency, fminf(frequency, params.maxFrequency));
+    // Apply clamping
+    float finalFreq = fmaxf(params.minFrequency, fminf(scaledFreq, params.maxFrequency));
     
+    // Print dimensions and parameters for the first 5 modes
+    if (modeIdx < 5) {
+        printf("Mode %d (n=%d, m=%d): R=%.2f, H=%.2f, T=%.2f\n", 
+            modeIdx, n, m, params.radius, params.height, params.thickness);
+        
+        // Add these debug prints
+        printf("  materialTerm=%.4f, nTerm=%.2f, mTerm=%.4f\n",
+            materialTerm, nTerm, mTerm);
+        printf("  bendingTerm=%.8f, membraneTerm=%.8f\n",
+            bendingTerm, membraneTerm);
+        
+        printf("  Raw freq: %.2f Hz, Scaled: %.2f Hz, Final: %.2f Hz\n", 
+            rawFreq, scaledFreq, finalFreq);
+    }
+
+    // Print frequency calculations for the first 5 modes
+    if (modeIdx < 5) {
+        printf("  Raw freq: %.2f Hz, Scaled: %.2f Hz, Final: %.2f Hz\n", 
+               rawFreq, scaledFreq, finalFreq);
+    }
+
     // Calculate relative amplitude based on mode
     // Lower modes typically have higher amplitude in real drums
     float amplitudeFactor = 1.0f / sqrtf(1.0f + 0.5f*n + 0.3f*m);
@@ -80,7 +96,7 @@ __global__ void initializeModesKernel(ResonantMode* modes, const BodyKernelParam
     decayFactor *= (1.0f / params.thickness);    // Thicker shells decay slower
     
     // Set the mode parameters
-    modes[modeIdx].frequency = frequency;
+    modes[modeIdx].frequency = finalFreq;
     modes[modeIdx].amplitude = amplitudeFactor;
     modes[modeIdx].decay = 1.0f / decayFactor;  // Inverse - higher value = longer decay
     modes[modeIdx].phase = 0.0f;  // Start in phase

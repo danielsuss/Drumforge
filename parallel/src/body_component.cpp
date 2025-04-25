@@ -200,8 +200,8 @@ void BodyComponent::setCouplingData(const CouplingData& data) {
         
         for (int i = 0; i < kernelParams->numModes; i++) {
             // Calculate mode numbers (n,m)
-            int n = i % kernelParams->maxCircumferentialModes;  // Circumferential
-            int m = (i / kernelParams->maxCircumferentialModes) % kernelParams->maxAxialModes;  // Axial
+            int m = i / 3;  // Every 3 modes, increment m
+            int n = 1 + (i % 7);  // Cycle through n=1..7
             
             // Physically-based mode excitation factors
             
@@ -216,7 +216,7 @@ void BodyComponent::setCouplingData(const CouplingData& data) {
             
             // Height position factor - roughly estimated based on the strike position and mode shape
             // In a real drum, this would involve the coupling between membrane and shell
-            float heightFactor = 1.0f;  // For now, just use 1.0 (simplification)
+            float heightFactor = (m == 0) ? 1.0f : 10.0f;  // For now, just use 1.0 (simplification)
             
             // For m=0 modes (pure circumferential), use full excitation
             if (m == 0) heightFactor = 1.0f;
@@ -225,7 +225,7 @@ void BodyComponent::setCouplingData(const CouplingData& data) {
             excitation[i] = strength * radialFactor * std::max(0.1f, angularFactor) * heightFactor;
             
             // Scale based on expected energy distribution - lower modes receive more energy
-            excitation[i] /= (1.0f + 0.5f*n + 0.3f*m);
+            excitation[i] /= (1.0f + 0.1f*n + 0.1f*m);
         }
         
         // Apply the calculated excitation to all modes
@@ -394,6 +394,24 @@ void BodyComponent::updateAudio(float timestep) {
     // Get the current mode states from device
     getModeStates();
     
+    // Add this - debug output to see if height-dependent modes are active
+    static int counter = 0;
+    if (counter++ % 60 == 0) {  // Only output once per second or so
+        float m0sum = 0.0f;  // Sum of m=0 mode energies
+        float m1sum = 0.0f;  // Sum of m>0 mode energies
+        
+        for (int i = 0; i < kernelParams->numModes; i++) {
+            int m = i / 3;  // Using same calculation as elsewhere
+            float energy = fabs(h_modeStates[i]);
+            
+            if (m == 0) m0sum += energy;
+            else m1sum += energy;
+        }
+        
+        std::cout << "Mode energy - Height-independent: " << m0sum 
+                  << ", Height-dependent: " << m1sum << std::endl;
+    }
+    
     // Get the modes from device for microphone sampling
     std::vector<ResonantMode> modes(kernelParams->numModes);
     d_modes->copyToHost(modes.data());
@@ -453,25 +471,41 @@ float BodyComponent::sampleMicrophonePosition(const BodyVirtualMicrophone& mic,
                                              const std::vector<ResonantMode>& modes) {
     float sample = 0.0f;
     
-    // Calculate sample by summing modal contributions with position weighting
+    // Calculate sample by summing modal contributions
     for (int modeIdx = 0; modeIdx < kernelParams->numModes; modeIdx++) {
+        // Calculate n,m mode numbers exactly as in initializeModesKernel
+        int m = modeIdx / 3;  // Every 3 modes, increment m
+        int n = 1 + (modeIdx % 7);  // Cycle through n=1..7
+        
+        // Get mode parameters and state
         float amplitude = modes[modeIdx].amplitude;
+        float frequency = modes[modeIdx].frequency;
         float state = h_modeStates[modeIdx];
         
-        // Calculate spatial weighting based on microphone position
-        float modeNumber = static_cast<float>(modeIdx + 1);
-        float theta = mic.position.x * 2.0f * M_PI; // Angular position
-        float heightPos = mic.height;
+        // Skip very small states to optimize
+        if (fabs(state) < 1e-5f) continue;
         
-        // Spatial weighting - simplified approximation of shell vibration modes
-        float spatialWeight = cos(modeNumber * theta) * 
-                             sin(modeNumber * heightPos * M_PI);
+        // Calculate spatial weighting based on mode shape
+        float theta = mic.position.x * 2.0f * M_PI;  // Angular position 
+        float height = mic.height;                   // Height position [0-1]
+        
+        // Compute proper mode shape - different for m=0 vs m>0
+        float spatialWeight;
+        if (m == 0) {
+            // Circumferential mode (no height dependence)
+            spatialWeight = cos(n * theta);
+        } else {
+            // Height-dependent mode
+            spatialWeight = cos(n * theta) * sin(m * M_PI * height);
+            
+            // Boost height-dependent modes to make them more audible
+            spatialWeight *= 5.0f;
+        }
         
         // Add contribution
         sample += amplitude * state * spatialWeight;
     }
     
-    // Apply microphone gain
     return sample * mic.gain;
 }
 
