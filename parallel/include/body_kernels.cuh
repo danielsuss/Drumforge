@@ -32,11 +32,20 @@ struct BodyKernelParams {
     float maxFrequency;    // Maximum resonant frequency (Hz)
     float modeSpacing;     // Spacing between modes (1.0 = equal, >1.0 = stretched)
     
-    // Constructor with default values
+    // Additional physical parameters
+    float poissonsRatio;    // Poisson's ratio
+    
+    // Mode-specific parameters
+    int maxCircumferentialModes;  // Max number of circumferential modes (n)
+    int maxAxialModes;            // Max number of axial/longitudinal modes (m)
+    
+    // Constructor update
     BodyKernelParams()
         : radius(5.0f), height(10.0f), thickness(0.5f), cellSize(1.0f),
           density(0.7f), youngsModulus(1.0f), dampingFactor(0.02f),
-          numModes(64), minFrequency(60.0f), maxFrequency(4000.0f), modeSpacing(1.1f) {}
+          poissonsRatio(0.3f), // Default Poisson's ratio for wood
+          numModes(48), minFrequency(60.0f), maxFrequency(4000.0f), modeSpacing(1.1f),
+          maxCircumferentialModes(8), maxAxialModes(6) {}
 };
 
 // Core CUDA kernels

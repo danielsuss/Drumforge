@@ -186,30 +186,49 @@ CouplingData BodyComponent::getInterfaceData() {
 }
 
 void BodyComponent::setCouplingData(const CouplingData& data) {
-    // Check if there's an impact from membrane
     if (data.hasImpact) {
-        // Calculate modal excitation from impact
-        float strength = data.impactStrength * 0.5f; // Scale as needed
+        // Calculate impact position in polar coordinates relative to center
+        glm::vec2 normalizedPos = data.impactPosition - glm::vec2(0.5f, 0.5f);
+        float radialDist = glm::length(normalizedPos) * 2.0f;  // [0-1] range
+        float angle = atan2(normalizedPos.y, normalizedPos.x);  // [-π to π]
         
-        // Excite modes differently based on impact position
-        // Center impacts excite lower modes more, edge impacts excite higher modes
-        float distFromCenter = glm::length(data.impactPosition - glm::vec2(0.5f, 0.5f)) * 2.0f;
+        // Basic strength scaling
+        float strength = data.impactStrength * 0.5f;
         
         // Create excitation vector for all modes
         std::vector<float> excitation(kernelParams->numModes);
         
         for (int i = 0; i < kernelParams->numModes; i++) {
-            float modeNumber = static_cast<float>(i + 1);
+            // Calculate mode numbers (n,m)
+            int n = i % kernelParams->maxCircumferentialModes;  // Circumferential
+            int m = (i / kernelParams->maxCircumferentialModes) % kernelParams->maxAxialModes;  // Axial
             
-            // Edge impacts excite higher modes more, center impacts excite lower modes
-            float positionFactor = 1.0f - pow(abs(distFromCenter - (modeNumber/kernelParams->numModes)), 2.0f);
-            positionFactor = std::max(0.1f, positionFactor);
+            // Physically-based mode excitation factors
             
-            // Apply excitation - lower modes get more energy, decrease with mode number
-            excitation[i] = strength * positionFactor / sqrt(modeNumber);
+            // Radial position factor - excites modes based on impact distance from center
+            // Center hits excite modes with small n, edge hits excite modes with large n
+            float radialFactor = 1.0f - pow(fabs(radialDist - (float)n / kernelParams->maxCircumferentialModes), 2.0f);
+            radialFactor = std::max(0.1f, radialFactor);
+            
+            // Angular position factor - excites modes based on impact angle
+            // This simulates how different modes respond to impacts at different positions around the shell
+            float angularFactor = 0.5f + 0.5f * cos(n * angle);
+            
+            // Height position factor - roughly estimated based on the strike position and mode shape
+            // In a real drum, this would involve the coupling between membrane and shell
+            float heightFactor = 1.0f;  // For now, just use 1.0 (simplification)
+            
+            // For m=0 modes (pure circumferential), use full excitation
+            if (m == 0) heightFactor = 1.0f;
+            
+            // Combined excitation for this mode
+            excitation[i] = strength * radialFactor * std::max(0.1f, angularFactor) * heightFactor;
+            
+            // Scale based on expected energy distribution - lower modes receive more energy
+            excitation[i] /= (1.0f + 0.5f*n + 0.3f*m);
         }
         
-        // Apply excitation to all modes
+        // Apply the calculated excitation to all modes
         exciteAllModes(excitation);
     }
 }
