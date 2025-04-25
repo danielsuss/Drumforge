@@ -177,6 +177,9 @@ int main(int argc, char* argv[]) {
                     
                     // Add body to simulation
                     simManager.addComponent(body);
+
+                    body->initialize();
+                    CHECK_CUDA_ERRORS();
                     
                     // Set up coupling from membrane to body only for now
                     simManager.setupCoupling(membrane, body);

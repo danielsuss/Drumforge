@@ -26,7 +26,7 @@ GUIManager::GUIManager()
     configState.timeScale = 1.0f;
     configState.gridSizeX = 128;
     configState.gridSizeY = 128;
-    configState.gridSizeZ = 16;
+    configState.gridSizeZ = 128;
     configState.cellSize = 0.1f;
     configState.radius = 5.0f;
     configState.tension = 100.0f;
@@ -180,7 +180,7 @@ void GUIManager::renderMainMenu() {
     // Grid Size Controls
     ImGui::SliderInt("Grid Size X", &configState.gridSizeX, 64, 256);
     ImGui::SliderInt("Grid Size Y", &configState.gridSizeY, 64, 256);
-    ImGui::SliderInt("Grid Size Z", &configState.gridSizeZ, 16, 64);
+    ImGui::SliderInt("Grid Size Z", &configState.gridSizeZ, 64, 256);
     
     // Cell Size Control
     ImGui::SliderFloat("Cell Size", &configState.cellSize, 0.05f, 0.2f, "%.2f");
