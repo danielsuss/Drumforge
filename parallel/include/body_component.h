@@ -14,17 +14,8 @@ namespace drumforge {
 
 // Forward declarations
 struct BodyKernelParams;
+struct ResonantMode;
 class VisualizationManager;
-
-/**
- * Structure representing a resonant mode in the body
- */
-struct ResonantMode {
-    float frequency;    // Resonant frequency in Hz
-    float amplitude;    // Amplitude of this mode
-    float decay;        // Decay time in seconds
-    float phase;        // Initial phase (radians)
-};
 
 /**
  * Structure representing a virtual microphone on the body
@@ -58,33 +49,31 @@ private:
     bool useMixedOutput;   // Whether to mix all microphones or use them separately
     std::string material;  // Shell material name
     
-    // Grid parameters (set during initialization from SimulationManager)
+    // Grid parameters
     float cellSize;        // Physical size of each grid cell
     
     // Component positioning
     GridRegion region;     // The region allocated from the global grid
     
-    // Modal synthesis data
-    std::vector<ResonantMode> modes;   // Modal parameters
-    
-    // Microphones for sampling the body
-    std::vector<BodyVirtualMicrophone> microphones;
-    
-    // CUDA device buffers
-    std::shared_ptr<CudaBuffer<float>> d_modeStates;      // Current state of each mode
-    std::shared_ptr<CudaBuffer<float>> d_modeVelocities;  // Velocity of each mode
+    // CUDA device buffers (obtained from CudaMemoryManager)
+    std::shared_ptr<CudaBuffer<float>> d_modeStates;      // Current states
+    std::shared_ptr<CudaBuffer<float>> d_modeVelocities;  // Velocities
     std::shared_ptr<CudaBuffer<ResonantMode>> d_modes;    // Mode parameters
     std::shared_ptr<CudaBuffer<float>> d_excitation;      // Input excitation buffer
-    
-    // Component name
-    std::string name;
-    
-    // Kernel parameters wrapper (to avoid including CUDA headers here)
-    std::unique_ptr<BodyKernelParams> kernelParams;
     
     // Host-side data for CPU access (mostly for I/O)
     mutable std::vector<float> h_modeStates;
     mutable std::vector<float> h_modeVelocities;
+    mutable std::vector<ResonantMode> h_modes;
+    
+    // Microphones for sampling the body
+    std::vector<BodyVirtualMicrophone> microphones;
+    
+    // Component name
+    std::string name;
+    
+    // Kernel parameters wrapper
+    std::unique_ptr<BodyKernelParams> kernelParams;
     
     // OpenGL resource IDs for visualization
     unsigned int vaoId;        // Vertex Array Object ID
@@ -93,7 +82,7 @@ private:
     // Private utility methods
     void setupDefaultModes();
     void setupMaterialPreset(const std::string& material);
-    float sampleMicrophonePosition(const BodyVirtualMicrophone& mic, const std::vector<ResonantMode>& modes);
+    float sampleMicrophonePosition(const BodyVirtualMicrophone& mic);
     int getNumWireframeIndices() const;
 
 public:
@@ -142,6 +131,8 @@ public:
     
     // Parameter setters
     void setMaterial(const std::string& newMaterial);
+    void setHeight(float newHeight);
+    void setThickness(float newThickness);
     
     // Microphone management
     int addMicrophone(float x, float y, float height, float gain = 1.0f, const std::string& name = "");
@@ -160,16 +151,15 @@ public:
     // Microphone presets
     void setupDefaultMicrophones();
     
-    // Modal data access for visualization and analysis
-    int getNumModes() const { return static_cast<int>(modes.size()); }
-    const std::vector<ResonantMode>& getModes() const { return modes; }
-    const std::vector<float>& getModeStates() const;
+    // Debug functions
+    void reportModeFrequencies();
     
     // Accessors
     float getRadius() const { return radius; }
     float getHeight() const { return height; }
     float getThickness() const { return thickness; }
     const std::string& getMaterial() const { return material; }
+    const std::vector<float>& getModeStates() const;
     unsigned int getVAO() const { return vaoId; }
     unsigned int getEBO() const { return eboId; }
 };

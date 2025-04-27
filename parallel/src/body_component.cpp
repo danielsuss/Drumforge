@@ -113,7 +113,6 @@ void BodyComponent::initialize() {
     kernelParams->radius = radius;
     kernelParams->height = height;
     kernelParams->thickness = thickness;
-    kernelParams->cellSize = cellSize;
     
     // Set up material preset
     setupMaterialPreset(material);
@@ -121,7 +120,7 @@ void BodyComponent::initialize() {
     // Initialize modes
     setupDefaultModes();
     
-    // Allocate CUDA device buffers with safer error handling
+    // Create and initialize CUDA buffers
     try {
         int numModes = kernelParams->numModes;
         std::cout << "Allocating CUDA buffers for " << numModes << " modes..." << std::endl;
@@ -139,16 +138,23 @@ void BodyComponent::initialize() {
         // Allocate host buffers for data retrieval
         h_modeStates.resize(numModes, 0.0f);
         h_modeVelocities.resize(numModes, 0.0f);
+        h_modes.resize(numModes);
         
         // Initialize the modes on the GPU
         std::cout << "Initializing modes on GPU..." << std::endl;
         initializeModes(d_modes->get(), *kernelParams);
         
+        // Copy modes back to host for debug
+        d_modes->copyToHost(h_modes.data());
+        
         // Reset the body to its initial state
         resetBody(d_modeStates->get(), d_modeVelocities->get(), numModes);
         
+        // Print mode frequencies for debugging
+        reportModeFrequencies();
+        
         std::cout << "BodyComponent '" << name << "' initialized with " 
-                  << numModes << " modes" << std::endl;
+                << numModes << " modes" << std::endl;
     }
     catch (const std::exception& e) {
         std::cerr << "Exception during CUDA allocation: " << e.what() << std::endl;
@@ -186,62 +192,53 @@ CouplingData BodyComponent::getInterfaceData() {
 }
 
 void BodyComponent::setCouplingData(const CouplingData& data) {
-
     if (data.hasImpact) {
-
         std::cout << "Body receiving impact: strength=" << data.impactStrength
                   << ", position=(" << data.impactPosition.x << "," 
                   << data.impactPosition.y << ")" << std::endl;
-
+        
         // Calculate impact position in polar coordinates relative to center
         glm::vec2 normalizedPos = data.impactPosition - glm::vec2(0.5f, 0.5f);
         float radialDist = glm::length(normalizedPos) * 2.0f;  // [0-1] range
         float angle = atan2(normalizedPos.y, normalizedPos.x);  // [-π to π]
         
         // Basic strength scaling
-        float strength = data.impactStrength * 0.5f;
+        float strength = data.impactStrength * 10.0f;  // Boost the strength
         
         // Create excitation vector for all modes
-        std::vector<float> excitation(kernelParams->numModes);
+        std::vector<float> excitation(kernelParams->numModes, 0.0f);
+        
+        // Calculate circumferential and axial modes for indexing
+        int circumferentialModes = kernelParams->circumferentialModes;
+        int axialModes = kernelParams->axialModes;
         
         for (int i = 0; i < kernelParams->numModes; i++) {
             // Calculate mode numbers (n,m)
-            int m = i / 3;  // Every 3 modes, increment m
-            int n = 1 + (i % 7);  // Cycle through n=1..7
-            
-            // Physically-based mode excitation factors
+            int n = (i % circumferentialModes) + 1;  // Circumferential (1,2,3,...)
+            int m = (i / circumferentialModes) % axialModes;  // Axial (0,1,2,...)
             
             // Radial position factor - excites modes based on impact distance from center
-            // Center hits excite modes with small n, edge hits excite modes with large n
-            float radialFactor = 1.0f - pow(fabs(radialDist - (float)n / kernelParams->maxCircumferentialModes), 2.0f);
+            float radialFactor = 1.0f - std::pow(std::abs(radialDist - static_cast<float>(n) / circumferentialModes), 2.0f);
             radialFactor = std::max(0.1f, radialFactor);
             
             // Angular position factor - excites modes based on impact angle
-            // This simulates how different modes respond to impacts at different positions around the shell
-            float angularFactor = 0.5f + 0.5f * cos(n * angle);
+            float angularFactor = 0.5f + 0.5f * std::cos(n * angle);
+            angularFactor = std::max(0.1f, angularFactor);
             
-            // Height position factor - roughly estimated based on the strike position and mode shape
-            // In a real drum, this would involve the coupling between membrane and shell
-            float heightFactor = (m == 0) ? 1.0f : 10.0f;  // For now, just use 1.0 (simplification)
-            
-            // For m=0 modes (pure circumferential), use full excitation
-            if (m == 0) heightFactor = 1.0f;
+            // Height position factor - roughly estimated
+            float heightFactor = (m == 0) ? 1.0f : 0.5f;  // Reduce excitation for height modes
             
             // Combined excitation for this mode
-            excitation[i] = strength * radialFactor * std::max(0.1f, angularFactor) * heightFactor;
+            excitation[i] = strength * radialFactor * angularFactor * heightFactor;
             
             // Scale based on expected energy distribution - lower modes receive more energy
             excitation[i] /= (1.0f + 0.1f*n + 0.1f*m);
-
-            std::cout << "Applied excitation to " << kernelParams->numModes << " body modes" << std::endl;
         }
-
-        std::cout << "Created excitation vector for " << kernelParams->numModes << " modes" << std::endl;
         
         // Apply the calculated excitation to all modes
         exciteAllModes(excitation);
-
-        std::cout << "Applied excitation to all modes" << std::endl;
+        
+        std::cout << "Created excitation vector for " << kernelParams->numModes << " modes" << std::endl;
     }
 }
 
@@ -403,30 +400,54 @@ void BodyComponent::updateAudio(float timestep) {
         initializeAudioChannels();
     }
     
-    // Get the current mode states from device
+    // Get mode states from the device
     getModeStates();
     
-    // Add this - debug output to see if height-dependent modes are active
+    // Debug energy
     static int counter = 0;
-    if (counter++ % 60 == 0) {  // Only output once per second or so
-        float m0sum = 0.0f;  // Sum of m=0 mode energies
-        float m1sum = 0.0f;  // Sum of m>0 mode energies
+    if (counter++ % 60 == 0) {
+        float totalEnergy = 0.0f;
+        int activeCount = 0;
         
-        for (int i = 0; i < kernelParams->numModes; i++) {
-            int m = i / 3;  // Using same calculation as elsewhere
-            float energy = fabs(h_modeStates[i]);
-            
-            if (m == 0) m0sum += energy;
-            else m1sum += energy;
+        for (size_t i = 0; i < h_modeStates.size(); i++) {
+            float energy = std::abs(h_modeStates[i]);
+            if (energy > 0.0001f) {
+                totalEnergy += energy;
+                activeCount++;
+            }
         }
         
-        std::cout << "Mode energy - Height-independent: " << m0sum 
-                  << ", Height-dependent: " << m1sum << std::endl;
+        // Also debug which modes are most active
+        if (activeCount > 0) {
+            float maxEnergy = 0.0f;
+            int maxEnergyIdx = -1;
+            
+            for (size_t i = 0; i < h_modeStates.size(); i++) {
+                float energy = std::abs(h_modeStates[i]);
+                if (energy > maxEnergy) {
+                    maxEnergy = energy;
+                    maxEnergyIdx = i;
+                }
+            }
+            
+            if (maxEnergyIdx >= 0) {
+                int circumferentialModes = kernelParams->circumferentialModes;
+                int n = (maxEnergyIdx % circumferentialModes) + 1;
+                int m = (maxEnergyIdx / circumferentialModes) % kernelParams->axialModes;
+                
+                std::cout << "Body energy: " << totalEnergy 
+                          << " (active modes: " << activeCount << "/" << h_modeStates.size() 
+                          << "), strongest mode: " << maxEnergyIdx
+                          << " (n=" << n << ", m=" << m << ")" << std::endl;
+            }
+        } else {
+            std::cout << "Body energy: " << totalEnergy 
+                      << " (active modes: " << activeCount << "/" << h_modeStates.size() << ")" << std::endl;
+        }
     }
     
-    // Get the modes from device for microphone sampling
-    std::vector<ResonantMode> modes(kernelParams->numModes);
-    d_modes->copyToHost(modes.data());
+    // Get mode parameters
+    d_modes->copyToHost(h_modes.data());
     
     if (useMixedOutput) {
         // Mix all microphones
@@ -438,9 +459,9 @@ void BodyComponent::updateAudio(float timestep) {
             if (!mic.enabled) continue;
             
             // Sample this microphone position
-            float sample = sampleMicrophonePosition(mic, modes);
+            float sample = sampleMicrophonePosition(mic);
             
-            // Update channel value (for visualization/monitoring)
+            // Update channel value for visualization/monitoring
             if (i < static_cast<int>(audioChannelIndices.size())) {
                 audioManager.setChannelValue(audioChannelIndices[i], sample);
             }
@@ -452,7 +473,7 @@ void BodyComponent::updateAudio(float timestep) {
         
         // Apply mixing formula and master gain
         if (activeMicCount > 0) {
-            mixedSignal /= sqrt(static_cast<float>(activeMicCount));
+            mixedSignal /= std::sqrt(static_cast<float>(activeMicCount));
             mixedSignal *= masterGain;
             
             // Process audio step with the mixed signal
@@ -465,9 +486,9 @@ void BodyComponent::updateAudio(float timestep) {
             if (!mic.enabled) continue;
             
             // Sample this microphone position
-            float sample = sampleMicrophonePosition(mic, modes);
+            float sample = sampleMicrophonePosition(mic);
             
-            // Update channel value (for visualization/monitoring)
+            // Update channel value for visualization/monitoring
             if (i < static_cast<int>(audioChannelIndices.size())) {
                 audioManager.setChannelValue(audioChannelIndices[i], sample);
             }
@@ -479,36 +500,38 @@ void BodyComponent::updateAudio(float timestep) {
     }
 }
 
-float BodyComponent::sampleMicrophonePosition(const BodyVirtualMicrophone& mic, 
-                                             const std::vector<ResonantMode>& modes) {
+float BodyComponent::sampleMicrophonePosition(const BodyVirtualMicrophone& mic) {
     float sample = 0.0f;
     
+    // Calculate circumferential and axial modes for indexing
+    int circumferentialModes = kernelParams->circumferentialModes;
+    int axialModes = kernelParams->axialModes;
+    
     // Calculate sample by summing modal contributions
-    for (int modeIdx = 0; modeIdx < kernelParams->numModes; modeIdx++) {
-        // Calculate n,m mode numbers exactly as in initializeModesKernel
-        int m = modeIdx / 3;  // Every 3 modes, increment m
-        int n = 1 + (modeIdx % 7);  // Cycle through n=1..7
+    for (size_t i = 0; i < h_modeStates.size(); i++) {
+        // Calculate mode numbers (n,m)
+        int n = (i % circumferentialModes) + 1;  // Circumferential (1,2,3,...)
+        int m = (i / circumferentialModes) % axialModes;  // Axial (0,1,2,...)
         
-        // Get mode parameters and state
-        float amplitude = modes[modeIdx].amplitude;
-        float frequency = modes[modeIdx].frequency;
-        float state = h_modeStates[modeIdx];
+        // Get mode state
+        float state = h_modeStates[i];
+        float amplitude = h_modes[i].amplitude;
         
         // Skip very small states to optimize
-        if (fabs(state) < 1e-5f) continue;
+        if (std::abs(state) < 0.0001f) continue;
         
-        // Calculate spatial weighting based on mode shape
-        float theta = mic.position.x * 2.0f * M_PI;  // Angular position 
+        // Calculate spatial weighting based on microphone position
+        float theta = mic.position.x * 2.0f * M_PI; // Angular position 
         float height = mic.height;                   // Height position [0-1]
         
         // Compute proper mode shape - different for m=0 vs m>0
         float spatialWeight;
         if (m == 0) {
             // Circumferential mode (no height dependence)
-            spatialWeight = cos(n * theta);
+            spatialWeight = std::cos(n * theta);
         } else {
             // Height-dependent mode
-            spatialWeight = cos(n * theta) * sin(m * M_PI * height);
+            spatialWeight = std::cos(n * theta) * std::sin(m * M_PI * height);
             
             // Boost height-dependent modes to make them more audible
             spatialWeight *= 5.0f;
@@ -560,19 +583,52 @@ void BodyComponent::exciteAllModes(const std::vector<float>& excitation) {
 }
 
 void BodyComponent::setupDefaultModes() {
-    // Set number of modes (fewer modes is more efficient)
-    int numModes = 48; // Reduced from 64 for better performance
-    kernelParams->numModes = numModes;
+    // Set up parameters
+    kernelParams->numModes = 32;  // Total modes
+    kernelParams->circumferentialModes = 4;  // n values: 1, 2, 3, 4
+    kernelParams->axialModes = 8;  // m values: 0, 1, 2, 3, 4, 5, 6, 7
     
-    // Other parameters are set by the material preset
-    std::cout << "Set up " << numModes << " default modes for body resonator" << std::endl;
+    std::cout << "Set up default mode parameters: " 
+              << kernelParams->numModes << " modes total ("
+              << kernelParams->circumferentialModes << " circumferential, "
+              << kernelParams->axialModes << " axial)" << std::endl;
 }
 
 void BodyComponent::setupMaterialPreset(const std::string& material) {
-    // Use the kernel helper to set up the material preset
+    // Use the helper function to set up the material preset
     ::drumforge::setupMaterialPreset(*kernelParams, material);
     
     std::cout << "Applied material preset for '" << material << "'" << std::endl;
+}
+
+void BodyComponent::reportModeFrequencies() {
+    // Get mode parameters from device if needed
+    if (h_modes.empty() || h_modes.size() != static_cast<size_t>(kernelParams->numModes)) {
+        h_modes.resize(kernelParams->numModes);
+        if (d_modes) {
+            d_modes->copyToHost(h_modes.data());
+        }
+    }
+    
+    std::cout << "==== Mode Frequency Report ====" << std::endl;
+    std::cout << "Radius: " << radius << ", Height: " << height 
+              << ", Thickness: " << thickness << ", Material: " << material << std::endl;
+    
+    // Calculate mode indices for reporting
+    int circumferentialModes = kernelParams->circumferentialModes;
+    int axialModes = kernelParams->axialModes;
+    
+    // Report a selection of modes
+    for (size_t i = 0; i < std::min(size_t(16), h_modes.size()); i++) {
+        int n = (i % circumferentialModes) + 1;
+        int m = (i / circumferentialModes) % axialModes;
+        
+        std::cout << "Mode " << i << " (n=" << n << ", m=" << m << "): " 
+                  << "Freq=" << h_modes[i].frequency << " Hz, "
+                  << "Amp=" << h_modes[i].amplitude << ", "
+                  << "Decay=" << h_modes[i].decay << " sec" << std::endl;
+    }
+    std::cout << "============================" << std::endl;
 }
 
 //-----------------------------------------------------------------------------
@@ -580,19 +636,81 @@ void BodyComponent::setupMaterialPreset(const std::string& material) {
 //-----------------------------------------------------------------------------
 
 void BodyComponent::setMaterial(const std::string& newMaterial) {
+    if (material == newMaterial) return;  // No change needed
+    
     // Update the component's material value
     material = newMaterial;
     
     // Update material parameters
     setupMaterialPreset(material);
     
-    std::cout << "Body material updated to " << material << std::endl;
-    
     // Reinitialize the modes with the new material parameters
-    initializeModes(d_modes->get(), *kernelParams);
+    if (d_modes) {
+        initializeModes(d_modes->get(), *kernelParams);
+        
+        // Get updated mode parameters for debugging
+        h_modes.resize(kernelParams->numModes);
+        d_modes->copyToHost(h_modes.data());
+        
+        // Report updated frequencies
+        reportModeFrequencies();
+    }
     
-    // Reset the body with the new parameters
-    reset();
+    std::cout << "Body material updated to " << material << std::endl;
+}
+
+void BodyComponent::setHeight(float newHeight) {
+    if (newHeight <= 0.0f) {
+        std::cerr << "Error: Height must be positive" << std::endl;
+        return;
+    }
+    
+    if (std::abs(height - newHeight) < 0.001f) return;  // No significant change
+    
+    // Update the component's height
+    height = newHeight;
+    kernelParams->height = height;
+    
+    // Reinitialize the modes with the new height
+    if (d_modes) {
+        initializeModes(d_modes->get(), *kernelParams);
+        
+        // Get updated mode parameters for debugging
+        h_modes.resize(kernelParams->numModes);
+        d_modes->copyToHost(h_modes.data());
+        
+        // Report updated frequencies
+        reportModeFrequencies();
+    }
+    
+    std::cout << "Body height updated to " << height << std::endl;
+}
+
+void BodyComponent::setThickness(float newThickness) {
+    if (newThickness <= 0.0f) {
+        std::cerr << "Error: Thickness must be positive" << std::endl;
+        return;
+    }
+    
+    if (std::abs(thickness - newThickness) < 0.0001f) return;  // No significant change
+    
+    // Update the component's thickness
+    thickness = newThickness;
+    kernelParams->thickness = thickness;
+    
+    // Reinitialize the modes with the new thickness
+    if (d_modes) {
+        initializeModes(d_modes->get(), *kernelParams);
+        
+        // Get updated mode parameters for debugging
+        h_modes.resize(kernelParams->numModes);
+        d_modes->copyToHost(h_modes.data());
+        
+        // Report updated frequencies
+        reportModeFrequencies();
+    }
+    
+    std::cout << "Body thickness updated to " << thickness << std::endl;
 }
 
 //-----------------------------------------------------------------------------
@@ -681,23 +799,22 @@ void BodyComponent::setupDefaultMicrophones() {
     
     // Add 4 microphones around the shell at different heights
     addMicrophone(0.0f, 0.0f, 0.5f, 1.0f, "Front");  // Front center
-    addMicrophone(0.5f, 0.0f, 0.7f, 0.8f, "Right");  // Right side, higher
-    addMicrophone(1.0f, 0.0f, 0.5f, 0.8f, "Back");   // Back center
-    addMicrophone(0.5f, 0.0f, 0.3f, 0.8f, "Left");   // Left side, lower
+    addMicrophone(0.25f, 0.0f, 0.7f, 0.8f, "Right");  // Right side, higher
+    addMicrophone(0.5f, 0.0f, 0.5f, 0.8f, "Back");   // Back center
+    addMicrophone(0.75f, 0.0f, 0.3f, 0.8f, "Left");   // Left side, lower
     
     audioChannelsInitialized = false;
 }
 
-//-----------------------------------------------------------------------------
-// Data Access Methods
-//-----------------------------------------------------------------------------
-
 const std::vector<float>& BodyComponent::getModeStates() const {
-    // Copy the current mode states from device to host for CPU access
+    // Copy the current states from device to host for CPU access
     auto& nonConstThis = const_cast<BodyComponent&>(*this);
     auto& nonConstStates = const_cast<std::vector<float>&>(h_modeStates);
     
-    d_modeStates->copyToHost(nonConstStates.data());
+    if (d_modeStates) {
+        d_modeStates->copyToHost(nonConstStates.data());
+    }
+    
     return h_modeStates;
 }
 

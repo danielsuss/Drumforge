@@ -161,36 +161,36 @@ int main(int argc, char* argv[]) {
                     std::cout << "Membrane connected to input handler - click on the membrane to apply impulses" << std::endl;
                 }
 
-                try {
-                    std::cout << "Creating body component..." << std::endl;
-                    float bodyRadius = membrane->getRadius();
-                    float bodyHeight = bodyRadius * guiManager.getConfigBodyHeight();
-                    float bodyThickness = bodyRadius * guiManager.getConfigBodyThickness();
-                    std::string bodyMaterial = guiManager.getConfigBodyMaterial();
+                // try {
+                //     std::cout << "Creating body component..." << std::endl;
+                //     float bodyRadius = membrane->getRadius();
+                //     float bodyHeight = bodyRadius * guiManager.getConfigBodyHeight();
+                //     float bodyThickness = bodyRadius * guiManager.getConfigBodyThickness();
+                //     std::string bodyMaterial = guiManager.getConfigBodyMaterial();
                     
-                    body = std::make_shared<drumforge::BodyComponent>(
-                        "DrumShell", 
-                        bodyRadius,    // Same radius as membrane
-                        bodyHeight,    // Height from config 
-                        bodyThickness, // Thickness from config
-                        bodyMaterial   // Material from config
-                    );
+                //     body = std::make_shared<drumforge::BodyComponent>(
+                //         "DrumShell", 
+                //         bodyRadius,    // Same radius as membrane
+                //         bodyHeight,    // Height from config 
+                //         bodyThickness, // Thickness from config
+                //         bodyMaterial   // Material from config
+                //     );
                     
-                    // Add body to simulation
-                    simManager.addComponent(body);
+                //     // Add body to simulation
+                //     simManager.addComponent(body);
                     
-                    // Explicitly initialize the body component (like in "body" branch)
-                    body->initialize();
-                    CHECK_CUDA_ERRORS();
+                //     // Explicitly initialize the body component (like in "body" branch)
+                //     body->initialize();
+                //     CHECK_CUDA_ERRORS();
                     
-                    // Set up coupling from membrane to body
-                    simManager.setupCoupling(membrane, body);
+                //     // Set up coupling from membrane to body
+                //     simManager.setupCoupling(membrane, body);
                     
-                    std::cout << "Body component created and coupled successfully" << std::endl;
-                }
-                catch (const std::exception& e) {
-                    std::cerr << "Error creating body component: " << e.what() << std::endl;
-                }
+                //     std::cout << "Body component created and coupled successfully" << std::endl;
+                // }
+                // catch (const std::exception& e) {
+                //     std::cerr << "Error creating body component: " << e.what() << std::endl;
+                // }
                 
                 // Mark simulation as initialized
                 simulationInitialized = true;

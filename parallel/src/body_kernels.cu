@@ -1,5 +1,4 @@
 #include "body_kernels.cuh"
-#include "body_component.h"
 #include "cuda_memory_manager.h"
 #include <cmath>
 #include <iostream>
@@ -20,86 +19,41 @@ __global__ void initializeModesKernel(ResonantMode* modes, const BodyKernelParam
         return;
     }
     
-    // Determine circumferential (n) and axial (m) mode numbers
-    // We'll distribute the modes to get a good variety of both types
-    int m = modeIdx / 3;  // Every 3 modes, increment m
-    int n = 1 + (modeIdx % 7);  // Cycle through n=1..7
+    // Calculate mode indices using consistent formula
+    int n = (modeIdx % params.circumferentialModes) + 1;  // 1, 2, 3, 4
+    int m = (modeIdx / params.circumferentialModes) % params.axialModes;  // 0, 1, 2, 3
     
-    // Avoid n=0, m=0 mode (rigid body mode with zero frequency)
-    if (n == 0 && m == 0) {
-        n = 1;  // Use n=1 instead
+    // Base frequency that increases with mode numbers
+    float baseFreq = 100.0f + 80.0f * n + 150.0f * m;
+    
+    // Apply dimensional scaling:
+    
+    // Radius effect: larger radius = lower frequency (inverse relationship)
+    baseFreq *= (5.0f / max(params.radius, 0.1f));
+    
+    // Height effect: only affects axial modes (m>0)
+    if (m > 0) {
+        // Taller drum = lower axial frequencies
+        baseFreq *= (0.5f / max(params.height, 0.1f));
     }
     
-    // Calculate frequency using the Donnell-Mushtari shell theory formula
-    float materialTerm = sqrtf(params.youngsModulus / 
-                              (params.density * (1.0f - params.poissonsRatio * params.poissonsRatio)));
+    // Thickness effect: thicker shell = higher frequency
+    baseFreq *= (params.thickness / 0.01f) * 0.2f + 0.8f;  // 20% contribution
     
-    // Geometry terms
-    float R = params.radius;
-    float L = params.height;
-    float h = params.thickness;
-    float nTerm = (float)n;
-    float mTerm = (float)m * M_PI * R / L;
+    // Material effects
+    baseFreq *= sqrtf(params.stiffness / max(params.density, 0.01f));
     
-    // Bending term
-    float bendingTerm = (h*h)/(12.0f*R*R) * powf(nTerm*nTerm + mTerm*mTerm, 2.0f);
-    
-    // Membrane term
-    float membraneTerm = (1.0f/(R*R)) * (1.0f + mTerm*mTerm);
-    
-    // Calculate raw frequency without scaling
-    float rawFreq = (1.0f/(2.0f*M_PI)) * materialTerm * sqrtf(bendingTerm + membraneTerm);
-    
-    // Apply scaling
-    float scaleFactor = 500.0f;
-    float scaledFreq = rawFreq * scaleFactor;
-    
-    // Apply clamping
-    float finalFreq = fmaxf(params.minFrequency, fminf(scaledFreq, params.maxFrequency));
-    
-    // Print dimensions and parameters for the first 5 modes
+    // Debug output for the first few modes
     if (modeIdx < 5) {
-        printf("Mode %d (n=%d, m=%d): R=%.2f, H=%.2f, T=%.2f\n", 
-            modeIdx, n, m, params.radius, params.height, params.thickness);
-        
-        // Add these debug prints
-        printf("  materialTerm=%.4f, nTerm=%.2f, mTerm=%.4f\n",
-            materialTerm, nTerm, mTerm);
-        printf("  bendingTerm=%.8f, membraneTerm=%.8f\n",
-            bendingTerm, membraneTerm);
-        
-        printf("  Raw freq: %.2f Hz, Scaled: %.2f Hz, Final: %.2f Hz\n", 
-            rawFreq, scaledFreq, finalFreq);
+        printf("Mode %d (n=%d, m=%d): radius=%.2f, height=%.2f, thickness=%.2f, freq=%.2f Hz\n", 
+              modeIdx, n, m, params.radius, params.height, params.thickness, baseFreq);
     }
-
-    // Print frequency calculations for the first 5 modes
-    if (modeIdx < 5) {
-        printf("  Raw freq: %.2f Hz, Scaled: %.2f Hz, Final: %.2f Hz\n", 
-               rawFreq, scaledFreq, finalFreq);
-    }
-
-    // Calculate relative amplitude based on mode
-    // Lower modes typically have higher amplitude in real drums
-    float amplitudeFactor = 1.0f / sqrtf(1.0f + 0.5f*n + 0.3f*m);
-    
-    // Calculate decay time - higher modes decay faster
-    float decayFactor = params.dampingFactor * (0.1f + 0.4f*n + 0.3f*m);
-    
-    // Material-specific adjustments
-    // Wood has more damping in higher modes
-    if (params.youngsModulus < 20.0f) {  // Wood materials
-        decayFactor *= (1.0f + 0.5f*n*n);
-    }
-    
-    // Adjust for thickness
-    amplitudeFactor *= sqrtf(params.thickness);  // Thicker shells have more amplitude
-    decayFactor *= (1.0f / params.thickness);    // Thicker shells decay slower
     
     // Set the mode parameters
-    modes[modeIdx].frequency = finalFreq;
-    modes[modeIdx].amplitude = amplitudeFactor;
-    modes[modeIdx].decay = 1.0f / decayFactor;  // Inverse - higher value = longer decay
-    modes[modeIdx].phase = 0.0f;  // Start in phase
+    modes[modeIdx].frequency = baseFreq;
+    modes[modeIdx].amplitude = 1.0f / (1.0f + 0.3f * n + 0.2f * m);  // Higher modes are quieter
+    modes[modeIdx].decay = (0.5f + 0.2f * n + 0.3f * m) / params.damping;  // Higher modes decay faster
+    modes[modeIdx].phase = 0.0f;
 }
 
 __global__ void resetBodyKernel(float* modeStates, float* modeVelocities, int numModes) {
@@ -142,7 +96,7 @@ __global__ void updateBodyModesKernel(float* modeStates, float* modeVelocities,
     float force = excitation[modeIdx];
     
     // Calculate damping coefficient
-    float damping = 1.0f / (decay * frequency + 0.0001f); // Avoid division by zero
+    float damping = 1.0f / max(decay, 0.001f); // Ensure not too small
     
     // Update using damped harmonic oscillator equations
     // a = -ω² * x - 2 * ζ * ω * v + F/m
@@ -295,94 +249,72 @@ dim3 calculateOptimalBlockSize(int dataSize) {
     return dim3(blockSizeX);
 }
 
-__host__ void setupMaterialPreset(BodyKernelParams& params, const std::string& material) {
-    // Default properties (Maple)
-    params.density = 700.0f;          // kg/m³
-    params.youngsModulus = 10.0e9f;   // 10 GPa (scaled down for simulation)
-    params.poissonsRatio = 0.3f;      // Typical for wood
-    params.dampingFactor = 0.02f;
+void setupMaterialPreset(BodyKernelParams& params, const std::string& material) {
+    std::cout << "Setting up material preset: " << material << std::endl;
     
-    // Set material-specific parameters
+    // Set default values (Maple)
+    params.density = 1.0f;
+    params.stiffness = 1.0f;
+    params.damping = 0.05f;
+    
+    // Adjust based on material type
     if (material == "Maple") {
         // Maple (medium-dense hardwood with balanced tone)
-        params.density = 700.0f;
-        params.youngsModulus = 10.0e9f;
-        params.dampingFactor = 0.02f;
+        params.density = 1.0f;
+        params.stiffness = 1.0f;
+        params.damping = 0.05f;
     }
     else if (material == "Birch") {
         // Birch (brighter sound with more attack)
-        params.density = 650.0f;
-        params.youngsModulus = 12.0e9f;
-        params.dampingFactor = 0.015f;
+        params.density = 0.9f;
+        params.stiffness = 1.2f;
+        params.damping = 0.04f;
     }
     else if (material == "Mahogany") {
         // Mahogany (warm and deep sound)
-        params.density = 550.0f;
-        params.youngsModulus = 8.0e9f;
-        params.dampingFactor = 0.025f;
+        params.density = 0.8f;
+        params.stiffness = 0.8f;
+        params.damping = 0.06f;
     }
     else if (material == "Metal") {
-        // Metal (bright with long sustain) - using aluminum properties
-        params.density = 2700.0f;
-        params.youngsModulus = 70.0e9f;
-        params.poissonsRatio = 0.33f;
-        params.dampingFactor = 0.005f;
+        // Metal (bright with long sustain)
+        params.density = 4.0f;
+        params.stiffness = 7.0f;
+        params.damping = 0.01f;
     }
     else if (material == "Acrylic") {
         // Acrylic (clear sound with less resonance)
-        params.density = 1200.0f;
-        params.youngsModulus = 3.0e9f;
-        params.poissonsRatio = 0.4f;
-        params.dampingFactor = 0.04f;
+        params.density = 1.7f;
+        params.stiffness = 0.4f;
+        params.damping = 0.08f;
     }
     
-    // Scale physical properties to work in our simulation
-    // Real world values are too large for float precision in our simulation
-    // This scaling preserves relative differences between materials
-    params.youngsModulus *= 1.0e-9f;  // Scale gigapascals to simulation units
-    params.density *= 0.001f;         // Scale kg/m³ to simulation units
-    
-    // Set the minimum and maximum frequency based on the material
-    // These will be used as bounds for our physically calculated frequencies
-    if (material == "Maple") {
-        params.minFrequency = 60.0f;
-        params.maxFrequency = 4000.0f;
-    }
-    else if (material == "Birch") {
-        params.minFrequency = 80.0f;
-        params.maxFrequency = 5000.0f;
-    }
-    else if (material == "Mahogany") {
-        params.minFrequency = 50.0f;
-        params.maxFrequency = 3500.0f;
-    }
-    else if (material == "Metal") {
-        params.minFrequency = 100.0f;
-        params.maxFrequency = 8000.0f;
-    }
-    else if (material == "Acrylic") {
-        params.minFrequency = 70.0f;
-        params.maxFrequency = 3000.0f;
-    }
-    
-    // Calculate actual mode frequency ranges based on dimensions in initializeModesKernel
-    printf("Material preset applied: %s\n", material.c_str());
-    printf("Physical properties - Density: %.1f, Young's modulus: %.2f, Poisson's ratio: %.2f\n", 
-           params.density * 1000.0f, params.youngsModulus * 1.0e9f, params.poissonsRatio);
+    std::cout << "Material properties set: density=" << params.density
+              << ", stiffness=" << params.stiffness
+              << ", damping=" << params.damping << std::endl;
 }
 
 float calculateStableTimestep(const BodyKernelParams& params) {
-    // KEY OPTIMIZATION: For physics, we only need stability up to ~1000Hz to maintain
-    // visual and physical accuracy. Higher frequencies are important for audio
-    // but don't need precise physics integration
-    float physicsMaxFreq = std::min(params.maxFrequency, 1000.0f);
+    // For modal synthesis, the timestep should be small enough to
+    // accurately sample the highest frequency mode
+    float maxFreq = 0.0f;
     
-    // The stable timestep is determined by the highest frequency
-    // A rule of thumb is: dt <= 1/(π*fmax)
-    float stableTimestep = 1.0f / (3.14159265359f * physicsMaxFreq);
+    // Approximate the highest possible frequency based on mode parameters
+    // This is a rough estimate based on our frequency calculation
+    int maxN = params.circumferentialModes;
+    int maxM = params.axialModes - 1;
     
-    // Apply safety factor (0.8) for numerical stability
-    return 0.8f * stableTimestep;
+    float baseFreq = 100.0f + 80.0f * maxN + 150.0f * maxM;
+    
+    // Apply material scaling
+    float materialFactor = std::sqrt(params.stiffness / std::max(params.density, 0.01f));
+    maxFreq = baseFreq * materialFactor;
+    
+    // Ensure we have enough samples per cycle (at least 10)
+    float minTimestep = 1.0f / (maxFreq * 10.0f);
+    
+    // Add safety factor
+    return minTimestep * 0.8f;
 }
 
 } // namespace drumforge
