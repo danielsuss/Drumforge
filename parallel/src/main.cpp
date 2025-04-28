@@ -1,16 +1,17 @@
 #include "cuda_memory_manager.h"
 #include "simulation_manager.h"
 #include "membrane_component.h"
+#include "simple_body_resonator.h"
 #include "visualization_manager.h"
 #include "input_handler.h"
 #include "gui_manager.h"
+#include "audio_manager.h"
 #include <iostream>
 #include <memory>
 #include <chrono>
 #include <thread>
 #include <stdexcept>
 #include <string>
-#include <body_component.h>
 
 // Global flag to control CUDA-OpenGL interop attempts
 bool g_enableCudaGLInterop = false;  // Set to false to disable interop completely
@@ -67,7 +68,7 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // After other manager initializations:
+        // Initialize Audio Manager
         drumforge::AudioManager& audioManager = drumforge::AudioManager::getInstance();
         audioManager.initialize(44100);  // 44.1kHz sample rate
         
@@ -81,10 +82,10 @@ int main(int argc, char* argv[]) {
         
         // Create a shared pointer for the membrane component (will initialize later)
         std::shared_ptr<drumforge::MembraneComponent> membrane = nullptr;
-        std::shared_ptr<drumforge::BodyComponent> body = nullptr;
+        std::shared_ptr<drumforge::SimpleBodyResonator> bodyResonator = nullptr;
         
         // Fixed timestep for simulation
-        const float timestep = 1.0f / 1.1f;  // ~60 FPS
+        const float timestep = 1.0f / 1.0f;  // ~60 FPS
         bool simulationInitialized = false;
         
         // Main loop
@@ -161,36 +162,36 @@ int main(int argc, char* argv[]) {
                     std::cout << "Membrane connected to input handler - click on the membrane to apply impulses" << std::endl;
                 }
 
-                // try {
-                //     std::cout << "Creating body component..." << std::endl;
-                //     float bodyRadius = membrane->getRadius();
-                //     float bodyHeight = bodyRadius * guiManager.getConfigBodyHeight();
-                //     float bodyThickness = bodyRadius * guiManager.getConfigBodyThickness();
-                //     std::string bodyMaterial = guiManager.getConfigBodyMaterial();
+                // Create the simple body resonator
+                try {
+                    std::cout << "Creating body resonator component..." << std::endl;
+                    float bodyRadius = membrane->getRadius();
+                    float bodyHeight = bodyRadius * guiManager.getConfigBodyHeight();
+                    float bodyThickness = bodyRadius * guiManager.getConfigBodyThickness();
+                    std::string bodyMaterial = guiManager.getConfigBodyMaterial();
                     
-                //     body = std::make_shared<drumforge::BodyComponent>(
-                //         "DrumShell", 
-                //         bodyRadius,    // Same radius as membrane
-                //         bodyHeight,    // Height from config 
-                //         bodyThickness, // Thickness from config
-                //         bodyMaterial   // Material from config
-                //     );
+                    bodyResonator = std::make_shared<drumforge::SimpleBodyResonator>(
+                        "DrumShell", 
+                        bodyRadius,    // Same radius as membrane
+                        bodyHeight,    // Height from config 
+                        bodyThickness, // Thickness from config
+                        bodyMaterial   // Material from config
+                    );
                     
-                //     // Add body to simulation
-                //     simManager.addComponent(body);
+                    // Add body resonator to simulation
+                    simManager.addComponent(bodyResonator);
                     
-                //     // Explicitly initialize the body component (like in "body" branch)
-                //     body->initialize();
-                //     CHECK_CUDA_ERRORS();
+                    // Initialize the body resonator
+                    bodyResonator->initialize();
                     
-                //     // Set up coupling from membrane to body
-                //     simManager.setupCoupling(membrane, body);
+                    // Set up coupling from membrane to body
+                    simManager.setupCoupling(membrane, bodyResonator);
                     
-                //     std::cout << "Body component created and coupled successfully" << std::endl;
-                // }
-                // catch (const std::exception& e) {
-                //     std::cerr << "Error creating body component: " << e.what() << std::endl;
-                // }
+                    std::cout << "Body resonator component created and coupled successfully" << std::endl;
+                }
+                catch (const std::exception& e) {
+                    std::cerr << "Error creating body resonator component: " << e.what() << std::endl;
+                }
                 
                 // Mark simulation as initialized
                 simulationInitialized = true;
@@ -202,6 +203,46 @@ int main(int argc, char* argv[]) {
                 // Advance simulation
                 simManager.advance(timestep);
                 CHECK_CUDA_ERRORS();
+                
+                // If we have a membrane and body resonator, handle audio processing
+                if (membrane && bodyResonator && audioManager.getIsRecording()) {
+                    // Get current membrane displacement at sample points
+                    const auto& heights = membrane->getHeights();
+                    float membraneOutput = 0.0f;
+                    
+                    // Calculate average of all microphone outputs
+                    for (int i = 0; i < membrane->getMicrophoneCount(); i++) {
+                        const auto& mic = membrane->getMicrophone(i);
+                        if (!mic.enabled) continue;
+                        
+                        // Convert mic position to grid coordinates
+                        int gridX = static_cast<int>(mic.position.x * membrane->getMembraneWidth());
+                        int gridY = static_cast<int>(mic.position.y * membrane->getMembraneHeight());
+                        
+                        // Get displacement if inside membrane
+                        if (membrane->isInsideCircle(gridX, gridY)) {
+                            int idx = gridY * membrane->getMembraneWidth() + gridX;
+                            float displacement = heights[idx] * mic.gain;
+                            membraneOutput += displacement;
+                        }
+                    }
+                    
+                    // Normalize and apply master gain
+                    if (membrane->getMicrophoneCount() > 0) {
+                        membraneOutput /= membrane->getMicrophoneCount();
+                        membraneOutput *= membrane->getMasterGain();
+                    }
+                    
+                    // Process through body resonator
+                    float combinedOutput = membraneOutput;
+                    if (bodyResonator) {
+                        float bodyOutput = bodyResonator->processInput(membraneOutput);
+                        combinedOutput = membraneOutput * 0.7f + bodyOutput * 0.3f;
+                    }
+                    
+                    // Add to audio buffer
+                    audioManager.processAudioStep(timestep / 60.0f, combinedOutput);
+                }
             }
             
             // Begin rendering frame

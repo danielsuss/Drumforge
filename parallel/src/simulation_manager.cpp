@@ -159,7 +159,7 @@ float SimulationManager::calculateStableTimestep() const {
         return 0.001f; // Default timestep of 1ms
     }
     
-    minTimestep = 0.05f; // Minimum timestep for simulation
+    // minTimestep = 0.05f; // Minimum timestep for simulation
 
     return minTimestep;
 }

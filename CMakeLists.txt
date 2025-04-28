@@ -75,6 +75,7 @@ set(HEADERS_PARALLEL
     parallel/include/audio_manager.h
     parallel/include/body_component.h
     parallel/include/body_kernels.cuh
+    parallel/include/simple_body_resonator.h
 )
 
 # Parallel source files
@@ -92,6 +93,7 @@ set(SOURCES_PARALLEL
     parallel/src/audio_manager.cpp
     parallel/src/body_component.cpp
     parallel/src/body_kernels.cu
+    parallel/src/simple_body_resonator.cpp
 )
 
 # Legacy executable
