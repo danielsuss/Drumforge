@@ -190,7 +190,8 @@ std::string BodyComponent::getName() const {
 
 float BodyComponent::calculateStableTimestep() const {
     // Use the kernel helper to calculate a stable timestep
-    return ::drumforge::calculateStableTimestep(*kernelParams);
+    // return ::drumforge::calculateStableTimestep(*kernelParams);
+    return 1.0f;
 }
 
 //-----------------------------------------------------------------------------
