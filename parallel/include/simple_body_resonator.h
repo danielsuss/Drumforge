@@ -12,6 +12,9 @@
 
 namespace drumforge {
 
+// Forward declarations
+class VisualizationManager;
+
 /**
  * A simple resonator model for the drum shell that enhances the sound
  * of the membrane using a bank of resonant filters.
@@ -78,6 +81,13 @@ private:
     void adjustFiltersForDimensions();
     float processSample(float input);
     
+    // Visualization-related members
+    unsigned int vaoId = 0;     // Vertex Array Object ID
+    unsigned int eboId = 0;     // Element Buffer Object ID
+    
+    // Helper for visualization
+    int getNumWireframeIndices() const;
+    
 public:
     // Constructor
     SimpleBodyResonator(
@@ -107,6 +117,11 @@ public:
         return DimensionRequirement::DIMENSION_3D;
     }
     
+    // Visualization-related methods
+    bool isVisualizable() const override { return true; }
+    void initializeVisualization(VisualizationManager& visManager) override;
+    void visualize(VisualizationManager& visManager) override;
+    
     // Audio-related methods
     void initializeAudioChannels() override;
     void updateAudio(float timestep) override;
@@ -133,6 +148,10 @@ public:
     float getMasterGain() const { return masterGain; }
     const std::string& getMaterial() const { return material; }
     int getFilterCount() const { return filters.size(); }
+    
+    // Visualization-related accessors
+    unsigned int getVAO() const { return vaoId; }
+    unsigned int getEBO() const { return eboId; }
 };
 
 } // namespace drumforge

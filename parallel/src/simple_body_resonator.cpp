@@ -1,4 +1,5 @@
 #include "simple_body_resonator.h"
+#include "visualization_manager.h"
 #include <iostream>
 #include <cmath>
 #include <algorithm>
@@ -45,6 +46,17 @@ SimpleBodyResonator::SimpleBodyResonator(
 
 SimpleBodyResonator::~SimpleBodyResonator() {
     std::cout << "SimpleBodyResonator '" << name << "' destroyed" << std::endl;
+    
+    // Clean up OpenGL resources if they were created
+    if (vaoId != 0) {
+        glDeleteVertexArrays(1, &vaoId);
+        vaoId = 0;
+    }
+    
+    if (eboId != 0) {
+        glDeleteBuffers(1, &eboId);
+        eboId = 0;
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -75,7 +87,8 @@ void SimpleBodyResonator::update(float timestep) {
 }
 
 void SimpleBodyResonator::prepareForVisualization() {
-    // No visualization needed for this simple component
+    // No dynamic updates needed for the body visualization
+    // The body is represented by a static cylinder shape
 }
 
 CouplingData SimpleBodyResonator::getInterfaceData() {
@@ -110,6 +123,134 @@ std::string SimpleBodyResonator::getName() const {
 float SimpleBodyResonator::calculateStableTimestep() const {
     // The resonator doesn't affect the simulation timestep
     return 2.0f / 1.0f;  // Default to 60 Hz simulation rate
+}
+
+//-----------------------------------------------------------------------------
+// Visualization Methods (added from BodyComponent)
+//-----------------------------------------------------------------------------
+
+void SimpleBodyResonator::initializeVisualization(VisualizationManager& visManager) {
+    // Check if already initialized
+    if (vaoId != 0) {
+        return;
+    }
+    
+    std::cout << "Initializing visualization for SimpleBodyResonator '" << name << "'..." << std::endl;
+    
+    try {
+        // Create vertices for a cylindrical shell
+        std::vector<float> vertices;
+        std::vector<unsigned int> indices;
+        
+        // Parameters for the cylinder
+        const int numSegments = 36;  // Number of segments around the circumference
+        const int numRings = 8;      // Number of rings along the height
+        
+        // Calculate vertices
+        for (int ring = 0; ring <= numRings; ring++) {
+            // Height position, with membrane at Z=0 and body extending down
+            float z = -((static_cast<float>(ring) / numRings) * height);
+            
+            for (int segment = 0; segment <= numSegments; segment++) {
+                float angle = (static_cast<float>(segment) / numSegments) * 2.0f * M_PI;
+                
+                // X and Y for circular cross-section
+                float x = radius * cos(angle);
+                float y = radius * sin(angle);
+                
+                // Add vertex (x, y, z)
+                vertices.push_back(x);
+                vertices.push_back(y);
+                vertices.push_back(z);
+            }
+        }
+        
+        // Calculate indices for wireframe rendering
+        for (int ring = 0; ring < numRings; ring++) {
+            for (int segment = 0; segment < numSegments; segment++) {
+                // Get indices of the current quad's corners
+                unsigned int topLeft = ring * (numSegments + 1) + segment;
+                unsigned int topRight = topLeft + 1;
+                unsigned int bottomLeft = (ring + 1) * (numSegments + 1) + segment;
+                unsigned int bottomRight = bottomLeft + 1;
+                
+                // Add lines for the wireframe (horizontal and vertical)
+                indices.push_back(topLeft);
+                indices.push_back(topRight);
+                
+                indices.push_back(topLeft);
+                indices.push_back(bottomLeft);
+            }
+        }
+        
+        // Create a vertex buffer
+        unsigned int vbo = visManager.createVertexBuffer(
+            vertices.size() * sizeof(float), 
+            vertices.data()
+        );
+        
+        // Create Vertex Array Object
+        vaoId = visManager.createVertexArray();
+        
+        // Configure vertex attributes
+        visManager.configureVertexAttributes(vaoId, vbo, 0, 3, 3 * sizeof(float), 0);
+        
+        // Create Element Buffer Object for wireframe indices
+        eboId = visManager.createIndexBuffer(indices.data(), indices.size() * sizeof(unsigned int));
+        
+        std::cout << "Visualization for SimpleBodyResonator '" << name << "' initialized successfully" << std::endl;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error initializing visualization: " << e.what() << std::endl;
+    }
+}
+
+void SimpleBodyResonator::visualize(VisualizationManager& visManager) {
+    // Get material color based on the current material type
+    glm::vec3 materialColor;
+    
+    if (material == "Maple") {
+        materialColor = glm::vec3(0.7f, 0.4f, 0.2f); // Light brown for maple
+    }
+    else if (material == "Birch") {
+        materialColor = glm::vec3(0.8f, 0.6f, 0.3f); // Lighter yellowish brown for birch
+    }
+    else if (material == "Mahogany") {
+        materialColor = glm::vec3(0.6f, 0.3f, 0.2f); // Darker reddish brown for mahogany
+    }
+    else if (material == "Metal") {
+        materialColor = glm::vec3(0.8f, 0.8f, 0.85f); // Silvery gray for metal
+    }
+    else if (material == "Acrylic") {
+        materialColor = glm::vec3(0.8f, 0.9f, 1.0f); // Translucent blue-ish for acrylic
+    }
+    else {
+        materialColor = glm::vec3(0.7f, 0.4f, 0.2f); // Default wood color
+    }
+    
+    // Render the body using a wireframe
+    visManager.renderWireframe(
+        vaoId,                    // VAO containing geometry
+        eboId,                    // EBO containing wireframe indices
+        getNumWireframeIndices(), // Number of indices to draw
+        materialColor             // Color based on material
+    );
+}
+
+int SimpleBodyResonator::getNumWireframeIndices() const {
+    // If we have no EBO yet, return 0
+    if (eboId == 0) {
+        return 0;
+    }
+    
+    // Get the count from OpenGL
+    GLint count;
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboId);
+    glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &count);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    
+    // Convert byte count to index count
+    return count / sizeof(unsigned int);
 }
 
 //-----------------------------------------------------------------------------
