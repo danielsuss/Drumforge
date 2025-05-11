@@ -617,7 +617,7 @@ void MembraneComponent::setAudioGain(float gain) {
 
 void MembraneComponent::updateAudio(float timestep) {
     // Apply the same timestep scaling that worked in the original
-    timestep *= 1.0f/(120.0f * 60.0f);
+    timestep *= 1.0f/(60.0f);
     
     // Get reference to AudioManager
     AudioManager& audioManager = AudioManager::getInstance();
