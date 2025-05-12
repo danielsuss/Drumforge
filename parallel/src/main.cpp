@@ -1,7 +1,7 @@
 #include "cuda_memory_manager.h"
 #include "simulation_manager.h"
 #include "membrane_component.h"
-#include "simple_body_resonator.h"
+#include "body_component.h"
 #include "visualization_manager.h"
 #include "input_handler.h"
 #include "gui_manager.h"
@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
         
         // Create a shared pointer for the membrane component (will initialize later)
         std::shared_ptr<drumforge::MembraneComponent> membrane = nullptr;
-        std::shared_ptr<drumforge::SimpleBodyResonator> bodyResonator = nullptr;
+        std::shared_ptr<drumforge::BodyComponent> bodyResonator = nullptr;
         
         // Fixed timestep for simulation
         const float timestep = 1.0f / 1.0f;  // ~60 FPS
@@ -170,7 +170,7 @@ int main(int argc, char* argv[]) {
                     float bodyThickness = bodyRadius * guiManager.getConfigBodyThickness();
                     std::string bodyMaterial = guiManager.getConfigBodyMaterial();
                     
-                    bodyResonator = std::make_shared<drumforge::SimpleBodyResonator>(
+                    bodyResonator = std::make_shared<drumforge::BodyComponent>(
                         "DrumShell", 
                         bodyRadius,    // Same radius as membrane
                         bodyHeight,    // Height from config 
