@@ -4,10 +4,8 @@ DrumForge is a physically-based drum synthesis system powered by CUDA GPU accele
 
 <div align="center">
   <a href="https://youtu.be/7DiiWhnudG8?si=KhHxf0J2t97YTnYk" target="_blank">
-    <img src="assets/drumheader.png" 
-         alt="Drumforge Demo Video" 
-         width="600"
-         style="object-fit: cover; height: 300px; object-position: center 55%;">
+    <img src="assets/drumforge icon.png" 
+         alt="Drumforge Demo Video">
   </a>
   <br><br>
   <em>Click to watch the demo on YouTube</em>
