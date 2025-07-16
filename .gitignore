@@ -63,3 +63,4 @@ _deps/
 # !vendor/your_required_file
 
 VisualizationPlan.md
+.claude/settings.local.json
