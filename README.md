@@ -2,18 +2,15 @@
 
 DrumForge is a physically-based drum synthesis system powered by CUDA GPU acceleration. It simulates drum physics in real-time using the Finite Difference Time Domain (FDTD) method for the membrane and modal synthesis for the shell resonance.
 
-<div align="center" style="margin: 20px 0;">
+<div align="center">
   <a href="https://youtu.be/7DiiWhnudG8?si=KhHxf0J2t97YTnYk" target="_blank">
-    <img src="https://img.youtube.com/vi/7DiiWhnudG8/maxresdefault.jpg" 
+    <img src="assets/drumheader.png" 
          alt="Drumforge Demo Video" 
-         width="600" 
-         style="border-radius: 12px; 
-                box-shadow: 0 6px 20px rgba(0,0,0,0.2); 
-                border: 2px solid #e1e5e9;
-                transition: all 0.3s ease;">
+         width="600"
+         style="object-fit: cover; height: 300px; object-position: center 55%;">
   </a>
   <br><br>
-  <em style="color: #666; font-size: 14px;">Click to watch the demo on YouTube</em>
+  <em>Click to watch the demo on YouTube</em>
 </div>
 
 ## Features
@@ -48,22 +45,26 @@ git submodule update --init --recursive
 ### 2. Install dependencies
 
 #### Ubuntu/Debian:
+
 ```bash
 sudo apt update
 sudo apt install build-essential cmake libglfw3-dev libglew-dev libglm-dev
 ```
 
 #### Arch Linux:
+
 ```bash
 sudo pacman -S base-devel cmake glfw-x11 glew glm
 ```
 
 #### macOS (using Homebrew):
+
 ```bash
 brew install cmake glfw glew glm
 ```
 
 #### Windows:
+
 Install the dependencies using vcpkg or download the binaries for each library.
 
 ### 3. Install CUDA Toolkit
