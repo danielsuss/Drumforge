@@ -1,6 +1,6 @@
-# DrumForge
+# Drumforge
 
-DrumForge is a physically-based drum synthesis system powered by CUDA GPU acceleration. It simulates drum physics in real-time using the Finite Difference Time Domain (FDTD) method for the membrane and modal synthesis for the shell resonance.
+Drumforge is a physically-based drum synthesis system powered by CUDA GPU acceleration. It simulates drum physics in real-time using the Finite Difference Time Domain (FDTD) method for the membrane and modal synthesis for the shell resonance.
 
 <div align="center">
   <a href="https://youtu.be/7DiiWhnudG8?si=KhHxf0J2t97YTnYk" target="_blank">
@@ -35,8 +35,8 @@ DrumForge is a physically-based drum synthesis system powered by CUDA GPU accele
 ### 1. Clone the repository with submodules
 
 ```bash
-git clone https://github.com/danielsuss/DrumForge.git
-cd DrumForge
+git clone https://github.com/danielsuss/Drumforge.git
+cd Drumforge
 git submodule update --init --recursive
 ```
 
@@ -101,7 +101,7 @@ cmake ..
 make
 ```
 
-## Running DrumForge
+## Running Drumforge
 
 ### Running the parallel version:
 
