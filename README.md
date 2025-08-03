@@ -2,12 +2,9 @@
 
 Drumforge is a physically-based drum synthesis system powered by CUDA GPU acceleration. It simulates drum physics in real-time using the Finite Difference Time Domain (FDTD) method for the membrane and modal synthesis for the shell resonance.
 
+[![Drumforge](https://img.youtube.com/vi/7DiiWhnudG8/maxresdefault.jpg)](https://youtu.be/7DiiWhnudG8?si=LHFoFV_swRQLIIEZ)
+
 <div align="center">
-  <a href="https://youtu.be/7DiiWhnudG8?si=KhHxf0J2t97YTnYk" target="_blank">
-    <img src="assets/drumforge icon.png" 
-         alt="Drumforge Demo Video">
-  </a>
-  <br><br>
   <em>Click to watch the demo on YouTube</em>
 </div>
 
